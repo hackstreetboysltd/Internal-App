@@ -40,15 +40,15 @@ fi
 if command -v npx &> /dev/null
 then
     echo "Using Node (http-server)..."
-    echo "Serving on http://localhost:${PORT:-3001} and opening browser..."
+    echo "Serving on http://localhost:3000 and opening browser..."
     # -c-1 disables caching, -a localhost forces localhost binding, -o opens browser
-    npx http-server -c-1 -p "${PORT:-3001}" -a localhost -o
+    npx http-server -c-1 -p 3000 -a localhost -o
 elif command -v python3 &> /dev/null
 then
     echo "npx not found. Using Python 3 server..."
-    echo "Serving on http://localhost:${PORT:-3001} and opening browser..."
+    echo "Serving on http://localhost:3000 and opening browser..."
     xdg-open http://localhost:3000 2>/dev/null &
-    python3 -m http.server "${PORT:-3001}" --bind localhost
+    python3 -m http.server 3000 --bind localhost
 else
     echo -e "\033[1;31mError: You need Node.js (npx) or Python 3 installed to run a local server.\033[0m"
     exit 1

@@ -310,6 +310,10 @@
                     placeholder="Search..."
                     oninput="renderTeammates()">
             </div>
+            <button onclick="openAddMemberModal()" title="Add a teammate manually"
+                style="width: auto; padding: 10px 16px; font-size: 0.88rem; white-space: nowrap; background: linear-gradient(135deg, #ff7a00, #ff5100); box-shadow: 0 4px 12px rgba(255, 122, 0, 0.25);">
+                <i class="fa-solid fa-user-plus"></i> Add Member
+            </button>
             <!-- Avatar Button opens myProfileModal -->
             <button onclick="openMyProfileModal()" class="avatar-btn" id="myProfileButton" title="My Profile">
                 
@@ -404,6 +408,49 @@
         </form>
     </div>
 
+    <!-- Add Member Modal (admin) -->
+    <div id="addMemberModal" class="modal" style="display: none">
+        <form id="addMemberForm" onsubmit="saveNewMember(event)" class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin: 0 auto; color: #ff7a00; display: flex; align-items: center; gap: 8px">
+                    <i class="fa-solid fa-user-plus"></i> Add Member
+                </h3>
+                <span class="close-btn" onclick="closeAddMemberModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="margin: 0 0 16px 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5">
+                    Pre-provision a teammate before they log in. They will be added to the directory and granted portal access.
+                </p>
+
+                <label class="required" for="addMemberName">Full Name</label>
+                <input type="text" id="addMemberName" placeholder="e.g. Jane Doe" required>
+
+                <label class="required" for="addMemberEmail">Email Address</label>
+                <input type="email" id="addMemberEmail" placeholder="e.g. jane@company.com" required>
+
+                <label for="addMemberRole">Designated Role</label>
+                <input type="text" id="addMemberRole" placeholder="e.g. Software Engineer" value="Software Engineer">
+
+                <label for="addMemberDept">Department</label>
+                <input type="text" id="addMemberDept" placeholder="e.g. Development" value="Development">
+
+                <label for="addMemberBio">Professional Bio</label>
+                <textarea id="addMemberBio"
+                    placeholder="Optional intro for the team directory..."></textarea>
+
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 4px; cursor: pointer; font-weight: 400;">
+                    <input type="checkbox" id="addMemberNotify" checked
+                        style="width: auto; margin: 0; accent-color: #ff7a00;">
+                    Notify them by email that access is ready
+                </label>
+
+                <button type="submit" id="addMemberSubmitBtn" style="margin-top: 16px; background: linear-gradient(135deg, #ff7a00, #ff5100); box-shadow: 0 4px 12px rgba(255, 122, 0, 0.25);">
+                    <i class="fa-solid fa-user-plus"></i> Add Member
+                </button>
+            </div>
+        </form>
+    </div>
+
     <!-- Profile Module Info Modal -->
     <div id="profileInfoModal" class="modal" style="display: none">
         <div class="modal-content">
@@ -421,10 +468,10 @@
                 <div>
                     <h4 style="color: #ff7a00; margin: 0 0 10px 0; font-size: 1rem; display: flex; align-items: center; gap: 7px"><i class="fa-solid fa-list-check"></i> Key Actions</h4>
                     <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px">
+                        <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Use <strong>Add Member</strong> to pre-provision teammates before they log in.</span></li>
+                        <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Approve or reject pending login requests from the directory cards.</span></li>
                         <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Click your avatar button to view and edit your own profile.</span></li>
-                        <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Update your designated role, department, and professional bio.</span></li>
                         <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Search the team directory by name, role, department, or bio.</span></li>
-                        <li style="display:flex; align-items:flex-start; gap:8px"><i class="fa-solid fa-circle-check" style="color:#ff7a00; margin-top:3px; flex-shrink:0"></i><span>Browse teammate cards to see bios and contact details.</span></li>
                     </ul>
                 </div>
             </div>

@@ -364,6 +364,161 @@ async function saveProfileEdit(e) {
     }, 300);
 }
 
+// Add Member modal controls
+function openAddMemberModal() {
+    const form = document.getElementById('addMemberForm');
+    if (form) form.reset();
+    const roleEl = document.getElementById('addMemberRole');
+    const deptEl = document.getElementById('addMemberDept');
+    const notifyEl = document.getElementById('addMemberNotify');
+    if (roleEl) roleEl.value = 'Software Engineer';
+    if (deptEl) deptEl.value = 'Development';
+    if (notifyEl) notifyEl.checked = true;
+
+    const modal = document.getElementById('addMemberModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+function closeAddMemberModal() {
+    const modal = document.getElementById('addMemberModal');
+    if (!modal) return;
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+window.openAddMemberModal = openAddMemberModal;
+window.closeAddMemberModal = closeAddMemberModal;
+
+// Pre-provision a teammate: create profile + grant login access (allowed list)
+window.saveNewMember = async function (e) {
+    e.preventDefault();
+
+    const name = document.getElementById('addMemberName').value.trim();
+    const email = document.getElementById('addMemberEmail').value.trim().toLowerCase();
+    const role = document.getElementById('addMemberRole').value.trim() || 'Software Engineer';
+    const department = document.getElementById('addMemberDept').value.trim() || 'Development';
+    const bio = document.getElementById('addMemberBio').value.trim();
+    const notify = document.getElementById('addMemberNotify').checked;
+    const submitBtn = document.getElementById('addMemberSubmitBtn');
+
+    if (!name || !email) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address.');
+        return;
+    }
+
+    const alreadyExists = allProfiles.some(p => p.email && p.email.toLowerCase() === email);
+    const alreadyAllowed = allowedEmails.map(e => e.trim().toLowerCase()).includes(email);
+    if (alreadyExists && alreadyAllowed) {
+        alert('A member with this email already exists in the directory.');
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Adding...';
+    }
+
+    try {
+        // 1. Grant login access via role_access allowed list
+        const raRes = await fetch('/api/role_access');
+        if (!raRes.ok) throw new Error('Failed to fetch role access');
+        const raData = await raRes.json();
+        if (!Array.isArray(raData)) throw new Error('Invalid role access data');
+
+        let allowedRec = raData.find(r => r.id === 'allowed');
+        if (!allowedRec) {
+            allowedRec = { id: 'allowed', emails: [] };
+            raData.push(allowedRec);
+        }
+        if (!allowedRec.emails) allowedRec.emails = [];
+
+        if (!allowedRec.emails.map(e => e.toLowerCase()).includes(email)) {
+            allowedRec.emails.push(email);
+        }
+
+        const raSave = await fetch('/api/role_access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(raData)
+        });
+        if (!raSave.ok) throw new Error('Failed to update allowed logins');
+
+        // 2. Upsert profile (safe merge against latest Firestore copy)
+        const newProfile = {
+            email,
+            name,
+            avatar: '',
+            role,
+            department,
+            bio: bio || 'Team member added by admin.',
+            approvedStatus: 'approved',
+            isProfileSetupComplete: false
+        };
+
+        let latestProfiles = [];
+        try {
+            const latestRes = await fetch('/api/profile');
+            if (latestRes.ok) {
+                latestProfiles = await latestRes.json();
+            }
+        } catch (_) { /* use empty */ }
+        if (!Array.isArray(latestProfiles)) latestProfiles = [];
+
+        const idx = latestProfiles.findIndex(p => p.email && p.email.toLowerCase() === email);
+        if (idx === -1) {
+            latestProfiles.push(newProfile);
+        } else {
+            latestProfiles[idx] = {
+                ...latestProfiles[idx],
+                ...newProfile,
+                // Keep an existing avatar if the member already logged in once
+                avatar: latestProfiles[idx].avatar || ''
+            };
+        }
+
+        const profileSave = await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(latestProfiles)
+        });
+        if (!profileSave.ok) throw new Error('Failed to save profile');
+
+        allProfiles = latestProfiles;
+        allowedEmails = allowedRec.emails;
+
+        // 3. Optional welcome / access email
+        if (notify && window.sendApprovalEmailToUser) {
+            await window.sendApprovalEmailToUser(email, name);
+        }
+
+        if (window.parent && typeof window.parent.loadDashboardStats === 'function') {
+            window.parent.loadDashboardStats();
+        }
+
+        closeAddMemberModal();
+        renderTeammates();
+        alert(`${name} has been added and granted portal access.`);
+    } catch (err) {
+        console.error('Error adding member:', err);
+        alert('Could not add member: ' + err.message);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Member';
+        }
+    }
+};
+
+window.addEventListener('click', (e) => {
+    const modal = document.getElementById('addMemberModal');
+    if (modal && e.target === modal) closeAddMemberModal();
+});
+
 // Reset Session / Logout
 function handleLogout() {
     if (confirm('Are you sure you want to log out of your session?')) {
