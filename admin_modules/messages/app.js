@@ -42,6 +42,82 @@ function decrypt(cipherText, key) {
     }
 }
 
+// ---- Password visibility toggle ----
+window.togglePasswordVisibility = function (inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input || !btn) return;
+    const icon = btn.querySelector('i');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    if (icon) {
+        icon.className = showing ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+    }
+    btn.title = showing ? 'Show encryption key' : 'Hide encryption key';
+    btn.setAttribute('aria-label', btn.title);
+};
+
+// ---- Rich text editor helpers (same pattern as Apps module) ----
+function sanitizeHtml(html) {
+    const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'BR', 'DIV', 'A', 'P', 'SPAN']);
+    const template = document.createElement('template');
+    template.innerHTML = html;
+
+    const walk = (node) => {
+        [...node.childNodes].forEach(child => {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+                if (!allowedTags.has(child.tagName)) {
+                    while (child.firstChild) child.parentNode.insertBefore(child.firstChild, child);
+                    child.parentNode.removeChild(child);
+                    return;
+                }
+                [...child.attributes].forEach(attr => {
+                    if (!(child.tagName === 'A' && attr.name === 'href')) {
+                        child.removeAttribute(attr.name);
+                    }
+                });
+                walk(child);
+            }
+        });
+    };
+    walk(template.content);
+    return template.innerHTML.trim();
+}
+
+function getEditorHtml(id) {
+    const el = document.getElementById(id);
+    return sanitizeHtml(el.innerHTML);
+}
+
+function setEditorHtml(id, html) {
+    document.getElementById(id).innerHTML = html || '';
+}
+
+function stripHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return (template.content.textContent || '').trim();
+}
+
+function initRichTextToolbars() {
+    document.querySelectorAll('.rte-toolbar').forEach(toolbar => {
+        const targetId = toolbar.dataset.target;
+        toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const editor = document.getElementById(targetId);
+                editor.focus();
+                const cmd = btn.dataset.cmd;
+                if (cmd === 'createLink') {
+                    const url = prompt('Enter URL:', 'https://');
+                    if (!url) return;
+                    document.execCommand('createLink', false, url);
+                } else {
+                    document.execCommand(cmd, false, null);
+                }
+            });
+        });
+    });
+}
+
 async function getMessages(forceRefresh = false) {
     if (cachedMessages && !forceRefresh) {
         return cachedMessages;
@@ -79,13 +155,14 @@ async function saveMessages(msgs) {
 async function sendMessage() {
     const author = document.getElementById('mAuthor').value.trim();
     const key = document.getElementById('sharedKey').value.trim();
-    const rawText = document.getElementById('plainMsg').value.trim();
+    const rawHtml = getEditorHtml('plainMsg');
+    const rawText = stripHtml(rawHtml);
 
-    if (!author || !key || !rawText) return alert('Your Name, secret key and plaintext message content are required');
+    if (!author || !key || !rawText) return alert('Your Name, secret key and message content are required');
 
-    const encryptedData = encrypt(rawText, key);
+    const encryptedData = encrypt(rawHtml, key);
     const msgs = await getMessages();
-    
+
     msgs.push({
         id: Date.now(),
         author,
@@ -106,8 +183,16 @@ async function sendMessage() {
     });
 
     document.getElementById('mAuthor').value = '';
-    document.getElementById('plainMsg').value = '';
+    setEditorHtml('plainMsg', '');
     document.getElementById('sharedKey').value = '';
+    document.getElementById('sharedKey').type = 'password';
+    const toggleBtn = document.querySelector('#skillModal .password-toggle');
+    if (toggleBtn) {
+        const icon = toggleBtn.querySelector('i');
+        if (icon) icon.className = 'fa-solid fa-eye';
+        toggleBtn.title = 'Show encryption key';
+        toggleBtn.setAttribute('aria-label', 'Show encryption key');
+    }
 
     closeMessageModal();
 }
@@ -277,7 +362,7 @@ async function renderMessages(forceRefresh = false) {
         if (dKey) {
             const decResult = decrypt(m.cipher, dKey);
             if (decResult !== "[Decryption Key Mismatch]" && decResult !== "[Invalid Cipher Block]") {
-                decryptedText = decResult;
+                decryptedText = stripHtml(decResult);
             }
         }
         return m.cipher.toLowerCase().includes(searchQuery) ||
@@ -463,7 +548,15 @@ window.openEditMessageModal = async function (msgId) {
     document.getElementById('editMsgId').value = item.id;
     document.getElementById('editMsgAuthor').value = item.author || '';
     document.getElementById('editSharedKey').value = '';
-    document.getElementById('editPlainMsg').value = '';
+    document.getElementById('editSharedKey').type = 'password';
+    setEditorHtml('editPlainMsg', '');
+    const editToggle = document.querySelector('#editMessageModal .password-toggle');
+    if (editToggle) {
+        const icon = editToggle.querySelector('i');
+        if (icon) icon.className = 'fa-solid fa-eye';
+        editToggle.title = 'Show encryption key';
+        editToggle.setAttribute('aria-label', 'Show encryption key');
+    }
 
     const modal = document.getElementById('editMessageModal');
     if (!modal) return;
@@ -487,12 +580,13 @@ window.saveEditMessage = async function () {
     const id = parseInt(document.getElementById('editMsgId').value);
     const author = document.getElementById('editMsgAuthor').value.trim();
     const key = document.getElementById('editSharedKey').value.trim();
-    const rawText = document.getElementById('editPlainMsg').value.trim();
+    const rawHtml = getEditorHtml('editPlainMsg');
+    const rawText = stripHtml(rawHtml);
 
-    if (!author || !key || !rawText) return alert('Your name, encryption key, and new plain message content are required');
+    if (!author || !key || !rawText) return alert('Your name, encryption key, and new message content are required');
 
     const actor = window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
-    const encryptedData = encrypt(rawText, key);
+    const encryptedData = encrypt(rawHtml, key);
     const list = await getMessages(true);
     const item = list.find(m => m.id === id);
     if (item) {
@@ -563,7 +657,11 @@ async function renderMessageDetailContent() {
     if (decryptedElem) {
         decryptedElem.style.color = isDecrypted ? '#f3f4f6' : (isError ? '#ef4444' : '#6b7280');
         decryptedElem.style.fontStyle = isDecrypted ? 'normal' : 'italic';
-        decryptedElem.textContent = decrypted;
+        if (isDecrypted) {
+            decryptedElem.innerHTML = sanitizeHtml(decrypted);
+        } else {
+            decryptedElem.textContent = decrypted;
+        }
     }
     if (iconContainer) {
         iconContainer.style.color = isDecrypted ? '#10b981' : (isError ? '#ef4444' : '#6b7280');
@@ -630,6 +728,7 @@ async function rejectPending(id) {
 
 function waitForFirebaseAndStart() {
     if (window.FirebaseDB) {
+        initRichTextToolbars();
         renderMessages(true);
     } else {
         setTimeout(waitForFirebaseAndStart, 50);

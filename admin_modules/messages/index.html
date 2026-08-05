@@ -116,6 +116,55 @@
         .modal-body::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.25);
         }
+
+        /* Password field with show/hide eye toggle */
+        .password-field {
+            position: relative;
+            margin-bottom: 0;
+        }
+
+        .password-field input {
+            width: 100%;
+            padding-right: 42px !important;
+            margin-bottom: 0 !important;
+            box-sizing: border-box;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px !important;
+            width: auto !important;
+            margin: 0 !important;
+            font-size: 0.95rem;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle:hover {
+            color: #34d399;
+            background: none !important;
+        }
+
+        #detailMessageDecrypted ul,
+        #detailMessageDecrypted ol {
+            margin: 0 0 0 20px;
+            padding: 0;
+        }
+
+        #detailMessageDecrypted a {
+            color: #34d399;
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -261,14 +310,37 @@
                 <label for="editSharedKey"
                     style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top:14px">Secret
                     Encryption Key</label>
-                <input type="password" id="editSharedKey" placeholder="Enter pre-shared secret..." required
-                    style="padding: 8px 12px; font-size: 0.85rem">
+                <div class="password-field">
+                    <input type="password" id="editSharedKey" placeholder="Enter pre-shared secret..." required
+                        style="padding: 8px 12px; font-size: 0.85rem">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('editSharedKey', this)"
+                        title="Show encryption key" aria-label="Show encryption key">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
 
-                <label for="editPlainMsg"
-                    style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top:14px">Message
+                <label style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top:14px">Message
                     Content</label>
-                <textarea id="editPlainMsg" placeholder="Type plain text message to encrypt..." required
-                    style="min-height: 100px; padding: 8px 12px; font-size: 0.85rem"></textarea>
+                <div class="rte-wrapper">
+                    <div class="rte-toolbar" data-target="editPlainMsg">
+                        <button type="button" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                        <button type="button" data-cmd="italic" title="Italic"><i class="fas fa-italic"></i></button>
+                        <button type="button" data-cmd="underline" title="Underline"><i
+                                class="fas fa-underline"></i></button>
+                        <span class="rte-divider"></span>
+                        <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i
+                                class="fas fa-list-ul"></i></button>
+                        <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i
+                                class="fas fa-list-ol"></i></button>
+                        <span class="rte-divider"></span>
+                        <button type="button" data-cmd="createLink" title="Insert link"><i
+                                class="fas fa-link"></i></button>
+                        <button type="button" data-cmd="removeFormat" title="Clear formatting"><i
+                                class="fas fa-eraser"></i></button>
+                    </div>
+                    <div id="editPlainMsg" class="rte-editor" contenteditable="true"
+                        data-placeholder="Type message content to encrypt..."></div>
+                </div>
 
                 <button onclick="saveEditMessage()"
                     style="margin-top:20px; background: #34d399; border-color: #34d399; color: #111827; font-weight: 600; width: 100%">
@@ -293,14 +365,37 @@
                 <label for="sharedKey"
                     style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top: 14px">Secret
                     Encryption Key</label>
-                <input type="password" id="sharedKey" placeholder="Enter pre-shared secret..." required
-                    style="padding: 8px 12px; font-size: 0.85rem">
+                <div class="password-field">
+                    <input type="password" id="sharedKey" placeholder="Enter pre-shared secret..." required
+                        style="padding: 8px 12px; font-size: 0.85rem">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('sharedKey', this)"
+                        title="Show encryption key" aria-label="Show encryption key">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
 
-                <label for="plainMsg"
-                    style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top: 14px">Message
+                <label style="font-size:0.85rem; color:#9ca3af; display:block; margin-bottom:6px; margin-top: 14px">Message
                     Content</label>
-                <textarea id="plainMsg" placeholder="Type plain text message to encrypt..." required
-                    style="min-height: 100px; padding: 8px 12px; font-size: 0.85rem"></textarea>
+                <div class="rte-wrapper">
+                    <div class="rte-toolbar" data-target="plainMsg">
+                        <button type="button" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                        <button type="button" data-cmd="italic" title="Italic"><i class="fas fa-italic"></i></button>
+                        <button type="button" data-cmd="underline" title="Underline"><i
+                                class="fas fa-underline"></i></button>
+                        <span class="rte-divider"></span>
+                        <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i
+                                class="fas fa-list-ul"></i></button>
+                        <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i
+                                class="fas fa-list-ol"></i></button>
+                        <span class="rte-divider"></span>
+                        <button type="button" data-cmd="createLink" title="Insert link"><i
+                                class="fas fa-link"></i></button>
+                        <button type="button" data-cmd="removeFormat" title="Clear formatting"><i
+                                class="fas fa-eraser"></i></button>
+                    </div>
+                    <div id="plainMsg" class="rte-editor" contenteditable="true"
+                        data-placeholder="Type message content to encrypt..."></div>
+                </div>
 
                 <button onclick="sendMessage()"
                     style="margin-top:20px; background: #34d399; border-color: #34d399; color: #111827; font-weight: 600; width: 100%">
