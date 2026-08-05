@@ -589,7 +589,8 @@ window.fetch = async function (...args) {
                     }
 
                     // Specify modules that must undergo admin review
-                    const requiresApproval = ['skills', 'procedures', 'calendar', 'meetings', 'messages', 'apps', 'glossary'];
+                    // Secure messages publish immediately — no admin approval queue
+                    const requiresApproval = ['skills', 'procedures', 'calendar', 'meetings', 'apps', 'glossary'];
 
                     if (requiresApproval.includes(path) && (created.length > 0 || edited.length > 0)) {
                         const pendingCol = 'pending_' + path;
