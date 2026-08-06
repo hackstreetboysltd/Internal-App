@@ -85,8 +85,6 @@ async function loadDashboardStats() {
 
 function setModuleChrome(isModuleOpen) {
     document.body.classList.toggle('module-open', !!isModuleOpen);
-    const dock = document.querySelector('.dock-container');
-    if (dock) dock.style.display = isModuleOpen ? 'none' : '';
 }
 
 function loadModule(folderName, displayName) {
