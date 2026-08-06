@@ -83,12 +83,19 @@ async function loadDashboardStats() {
     }
 }
 
+function setModuleChrome(isModuleOpen) {
+    document.body.classList.toggle('module-open', !!isModuleOpen);
+    const dock = document.querySelector('.dock-container');
+    if (dock) dock.style.display = isModuleOpen ? 'none' : '';
+}
+
 function loadModule(folderName, displayName) {
     const iframe = document.getElementById('moduleFrame');
     const welcomeScreen = document.getElementById('welcomeScreen');
 
     welcomeScreen.style.display = 'none';
     iframe.style.display = 'block';
+    setModuleChrome(true);
 
     const isAdmin = window.isAdminView === true;
     const folderPrefix = isAdmin ? 'admin_modules' : 'modules';
@@ -120,6 +127,7 @@ function showDashboard() {
     iframe.style.display = 'none';
     iframe.src = '';
     welcomeScreen.style.display = 'block';
+    setModuleChrome(false);
 
     activeModules.clear();
     updateActiveBar(null);
@@ -128,34 +136,15 @@ function showDashboard() {
     loadDashboardStats(); // Refresh stats when returning
 }
 
-function updateActiveBar(activeKey) {
+function updateActiveBar(_activeKey) {
     const listContainer = document.getElementById('activeList');
+    // Keep the top bar clean — module title lives inside the module header
     listContainer.innerHTML = '';
-
-    if (activeModules.size === 0) {
-        return;
-    }
-
-    activeModules.forEach((name, key) => {
-        const span = document.createElement('span');
-        span.className = `active-tab ${key === activeKey ? 'active' : ''}`;
-
-        let iconHtml = '';
-        if (key === 'apps') iconHtml = '';
-        else if (key === 'meetings') iconHtml = '';
-        else if (key === 'messages') iconHtml = '';
-        else if (key === 'calendar') iconHtml = '';
-        else if (key === 'goals') iconHtml = '';
-        else if (key === 'skills') iconHtml = '';
-        else if (key === 'procedures') iconHtml = '';
-        else if (key === 'glossary') iconHtml = '';
-        else if (key === 'profile') iconHtml = '';
-
-        span.innerHTML = `${iconHtml} <span class="tab-text">${name}</span> `;
-        span.onclick = () => loadModule(key, name);
-        listContainer.appendChild(span);
-    });
 }
+
+// Expose for iframe close buttons
+window.showDashboard = showDashboard;
+window.loadModule = loadModule;
 
 function updateDockSelection(folderName) {
     const buttons = document.querySelectorAll('.dock-item');

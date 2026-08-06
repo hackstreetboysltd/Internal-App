@@ -125,7 +125,7 @@
     <div class="container">
         <!-- Top header row with centered Title/Info and Refresh on the far right -->
         <div class="header-container"
-            style="display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px">
+            style="display: grid; grid-template-columns: 40px 1fr auto; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px">
             <!-- Left placeholder to align center title -->
             <div></div>
 
@@ -140,13 +140,21 @@
                 </button>
             </h2>
 
-            <!-- Far right Refresh Button -->
-            <button class="refresh-btn" onclick="refreshMeetings()" title="Refresh meetings data"
-                style="background: none; border: none; cursor: pointer; color: #818cf8; padding: 0; width: 32px; height: 32px; box-shadow: none; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; opacity: 0.65; transition: opacity 0.2s, transform 0.2s; justify-self: end"
+            <!-- Far right Refresh + Close -->
+            <div class="header-actions-right" style="display: flex; align-items: center; gap: 4px; justify-self: end">
+                <button class="refresh-btn" onclick="refreshMeetings()" title="Refresh meetings data"
+                style="background: none; border: none; cursor: pointer; color: #818cf8; padding: 0; width: 32px; height: 32px; box-shadow: none; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; opacity: 0.65; transition: opacity 0.2s, transform 0.2s;"
                 onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'"
                 onmouseout="this.style.opacity='0.65'; this.style.transform='scale(1)'">
                 <i class="fa-solid fa-arrows-rotate"></i>
-            </button>
+                </button>
+                <button class="close-module-btn" onclick="window.parent.showDashboard()" title="Close module"
+                    style="background: none; border: none; cursor: pointer; color: #818cf8; padding: 0; width: 32px; height: 32px; box-shadow: none; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; opacity: 0.65; transition: opacity 0.2s, transform 0.2s"
+                    onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'"
+                    onmouseout="this.style.opacity='0.65'; this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Search Bar & Actions -->
