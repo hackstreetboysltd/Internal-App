@@ -458,6 +458,14 @@ iframe {
 }
 
 /* --- Floating macOS dock --- */
+body.module-open .dock-container {
+    display: none !important;
+}
+
+body.module-open .content-viewport {
+    padding-bottom: 24px;
+}
+
 .dock-container {
     position: fixed;
     bottom: 20px;

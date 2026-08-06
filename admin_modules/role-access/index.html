@@ -139,13 +139,23 @@
     <div class="container">
         <!-- Top header row -->
         <div class="header-container"
-            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px">
+            style="display: grid; grid-template-columns: 40px 1fr auto; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px">
+            <div></div>
             <h2 style="margin: 0 auto; border-bottom: none; padding-bottom: 0; font-size: 1.8rem; display: flex; align-items: center; gap: 10px">
                 <i class="fa-solid fa-user-lock" style="color: #fbbf24"></i> Role Access Configuration
                 <button onclick="openRoleAccessInfoModal()" title="About this module" style="background: none; border: none; cursor: pointer; color: #fbbf24; padding: 0; width: auto; box-shadow: none; font-size: 1rem; display: inline-flex; align-items: center; opacity: 0.65; transition: opacity 0.2s, transform 0.2s" onmouseover="this.style.opacity='1'; this.style.transform='scale(1.15)'" onmouseout="this.style.opacity='0.65'; this.style.transform='scale(1)'">
                     <i class="fa-solid fa-circle-info"></i>
                 </button>
             </h2>
+            <div class="header-actions-right" style="display: flex; align-items: center; gap: 4px; justify-self: end">
+                <button class="close-module-btn" onclick="window.parent.showDashboard()" title="Close module"
+                    style="background: none; border: none; cursor: pointer; color: #fbbf24"></i> Role Access Configuration
+                <button onclick="openRoleAccessInfoModal()" title="About this module" style="background: none; padding: 0; width: 32px; height: 32px; box-shadow: none; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; opacity: 0.65; transition: opacity 0.2s, transform 0.2s"
+                    onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'"
+                    onmouseout="this.style.opacity='0.65'; this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Loader Section -->
