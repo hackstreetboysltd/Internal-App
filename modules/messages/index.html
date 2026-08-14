@@ -209,7 +209,7 @@
         <!-- Search Bar & Actions -->
         <div class="header-actions" style="margin-bottom: 24px; display: flex; gap: 16px; align-items: center">
             <div class="search-input-wrapper" style="flex: 1">
-                <input type="text" id="searchMessages" placeholder="Search..." oninput="renderMessages()">
+                <input type="text" id="searchMessages" placeholder="Enter keyword..." oninput="renderMessages()">
             </div>
             <!-- Leaderboard Trigger Button -->
             <button onclick="openMessagesLeaderboardModal()"
@@ -224,8 +224,49 @@
         </div>
 
         <!-- Loader Section -->
-        <div id="messagesLoader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; width: 100%">
-            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--accent, #34d399)"></i>
+        <div id="messagesLoader" class="module-skeleton-grid" aria-busy="true" aria-label="Loading messages">
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card has-accent accent-green">
+                <div class="skel-compact-top">
+                    <span class="skel-line w55"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
         </div>
 
         <!-- Content Section (Initially Hidden) -->

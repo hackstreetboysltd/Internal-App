@@ -384,7 +384,7 @@ async function render(forceRefresh = false) {
     const shouldShowLoader = !cachedGoals || forceRefresh;
 
     if (shouldShowLoader && loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
 
@@ -485,10 +485,11 @@ async function render(forceRefresh = false) {
                 type = 'annual';
             }
 
-            const resolvedPeriod = record.periodId || record.weekId || 'Target';
             const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
-            const periodLabel = type === 'weekly' ? resolvedPeriod : `${capitalizedType} (${resolvedPeriod})`;
             const showTitle = ['annual', 'quarterly', 'monthly'].includes(type);
+            const recordEmail = (record.email && typeof record.email === 'string')
+                ? record.email.trim().toLowerCase()
+                : '';
 
             const totalGoalsCount = record.goals.length || 1;
             const completedCount = record.goals.filter(g => g.done).length;
@@ -511,16 +512,10 @@ async function render(forceRefresh = false) {
             card.style.transition = 'all 0.2s ease';
             card.setAttribute('onclick', `openGoalsViewModal(${record.id})`);
 
-            const scopeBadge = record.scope === 'global' ? 
-                `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 4px;">Global</span>` : 
-                `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 4px;">Personal</span>`;
-
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; padding: 2px;">
-                    <strong style="font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
-                        <span style="color:#fb7185;">${periodLabel}</span> 
-                        <span style="color:white; margin-left:4px;"> ${record.user}</span>
-                        ${scopeBadge}
+                    <strong style="font-size: 0.85rem; display: flex; align-items: center; gap: 4px; color:#9ca3af;">
+                        <span>${capitalizedType} • ${recordEmail || record.user || 'Unknown'}</span>
                     </strong>
                     ${deleteBtn}
                 </div>
@@ -763,17 +758,15 @@ async function renderGoalsViewContent() {
         } else if (type === 'long-term') {
             type = 'annual';
         }
-        const resolvedPeriod = record.periodId || record.weekId || 'Target';
         const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
-        const scopeBadge = record.scope === 'global' ? 
-            `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Global</span>` : 
-            `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal</span>`;
+        const recordEmail = (record.email && typeof record.email === 'string')
+            ? record.email.trim().toLowerCase()
+            : '';
 
         metaElem.innerHTML = `
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px; align-items: center;">
                 <span style="display: flex; align-items: center; gap: 4px;">
-                    <span>${capitalizedType}: <strong style="color: #fb7185;">${resolvedPeriod}</strong></span>
-                    ${scopeBadge}
+                    <span>${capitalizedType} • ${recordEmail || record.user || 'Unknown'}</span>
                 </span>
                 <span><strong>${completedCount} of ${record.goals.length} completed (${pct}%)</strong></span>
             </div>
@@ -1010,7 +1003,13 @@ function showHoverInfo(item) {
             activeGoalUser.style.display = 'none';
             activeGoalUser.innerText = '';
         } else {
-            activeGoalUser.innerText = `${item.user || 'Unknown'} • ${item.periodId}`;
+            const itemType = item.type
+                ? item.type.charAt(0).toUpperCase() + item.type.slice(1)
+                : 'Goal';
+            const itemEmail = (item.email && typeof item.email === 'string')
+                ? item.email.trim().toLowerCase()
+                : '';
+            activeGoalUser.innerText = `${itemType} • ${itemEmail || item.user || 'Unknown'}`;
             activeGoalUser.style.display = 'block';
         }
     }
@@ -1169,7 +1168,8 @@ function renderGoalWheel(data) {
                         type: tier.type,
                         periodId: record.periodId || record.weekId,
                         title: record.title || '',
-                        user: record.user
+                        user: record.user,
+                        email: record.email || ''
                     });
                 });
             }

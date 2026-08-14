@@ -279,7 +279,7 @@ async function renderMessages(forceRefresh = false) {
     const loader = document.getElementById('messagesLoader');
     const content = document.getElementById('messagesContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

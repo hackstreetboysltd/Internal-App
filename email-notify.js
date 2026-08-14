@@ -300,6 +300,7 @@ async function _getEmailForProfileName(name) {
  */
 window.notifyAssigneeOfGoal = async function ({
     assigneeName,
+    assigneeEmail: providedEmail,
     actorName,
     goalTitle,
     goalType,
@@ -319,7 +320,9 @@ window.notifyAssigneeOfGoal = async function ({
         return;
     }
 
-    const assigneeEmail = await _getEmailForProfileName(assigneeName);
+    const assigneeEmail = (providedEmail && String(providedEmail).includes('@'))
+        ? String(providedEmail).trim()
+        : await _getEmailForProfileName(assigneeName);
     if (!assigneeEmail || !assigneeEmail.includes('@')) {
         console.warn(`[EmailNotify] No email found for assignee "${assigneeName}" — skipping mandatory assign notification.`);
         return;
@@ -328,7 +331,7 @@ window.notifyAssigneeOfGoal = async function ({
     const actionPhrase = action === 'updated' ? 'updated a goal assigned to you' : 'assigned you a new goal';
     const typeLabel = goalType ? String(goalType) : 'goal';
     const period = periodId ? ` (${periodId})` : '';
-    const titlePart = (goalTitle || '').trim() || `${typeLabel} goals${period}`;
+    const titlePart = `${typeLabel} goals${period}`;
 
     const timestamp = new Date().toLocaleString('en-US', {
         dateStyle: 'medium',

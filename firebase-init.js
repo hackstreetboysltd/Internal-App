@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { getAuth, signInWithPopup, signInWithCredential, signInWithRedirect, getRedirectResult, onAuthStateChanged, GithubAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // Read env vars injected by env-config.js <script> tag (loaded before this module)
@@ -16,10 +17,12 @@ const firebaseConfig = {
 
 let db;
 let auth;
+let storage;
 try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
+    storage = getStorage(app);
 } catch (e) {
     console.warn("Firebase not properly configured yet.", e);
 }
@@ -33,6 +36,24 @@ window.FirebaseAuth = {
     onAuthStateChanged,
     GithubAuthProvider,
     signOut
+};
+
+window.FirebaseStorage = {
+    isReady: () => !!storage,
+    uploadFile: async (path, file) => {
+        if (!storage) throw new Error("Firebase Storage is unavailable.");
+        const fileRef = storageRef(storage, path);
+        await uploadBytes(fileRef, file);
+        return getDownloadURL(fileRef);
+    },
+    deleteFile: async (path) => {
+        if (!storage || !path) return;
+        try {
+            await deleteObject(storageRef(storage, path));
+        } catch (e) {
+            console.warn("Could not delete storage file:", e);
+        }
+    }
 };
 
 const withTimeout = (promise, ms = 10000) => {
@@ -61,7 +82,7 @@ function getDefaultGoalsSeed() {
         {
             id: 1720000000001,
             user: "Phil Kakai",
-            title: "Unify organizational tooling and portals",
+            email: "kakaiphil@gmail.com",
             goals: [
                 { text: "Transition all modules to single page suite", done: true },
                 { text: "Adopt Firestore as primary datastore", done: true },
@@ -74,7 +95,6 @@ function getDefaultGoalsSeed() {
         {
             id: 1720000000002,
             user: "Mulei",
-            title: "Optimize API Layer Performance",
             goals: [
                 { text: "Adopt batched writes for database transactions", done: true },
                 { text: "Improve cache invalidation strategies", done: true },
@@ -87,7 +107,6 @@ function getDefaultGoalsSeed() {
         {
             id: 1720000000003,
             user: "Mulei",
-            title: "",
             goals: [
                 { text: "Profile latency on large profile reads", done: true },
                 { text: "Implement defensive type checks on sync functions", done: true },
@@ -100,7 +119,6 @@ function getDefaultGoalsSeed() {
         {
             id: 1720000000004,
             user: "ryan mwiti",
-            title: "",
             goals: [
                 { text: "Resolve mobile viewport overflow issues", done: true },
                 { text: "Align goals tab-group styling across dashboards", done: false },
@@ -113,7 +131,6 @@ function getDefaultGoalsSeed() {
         {
             id: 1720000000005,
             user: "ryan mwiti",
-            title: "",
             goals: [
                 { text: "Implement standardized modal notifications", done: true },
                 { text: "Refactor goals edit to prevent duplicate creation", done: false }
@@ -259,6 +276,36 @@ window.FirebaseDB = {
                 }
             }
 
+            if (moduleName === 'goals' && Array.isArray(data)) {
+                data = data.map(record => {
+                    if (record && Object.prototype.hasOwnProperty.call(record, 'title')) {
+                        updated = true;
+                        const { title, ...rest } = record;
+                        return rest;
+                    }
+                    return record;
+                });
+
+                try {
+                    const usersSnap = await withTimeout(getDoc(doc(db, "modules", "profile")), 10000);
+                    const users = usersSnap.exists() ? (usersSnap.data().data || []) : [];
+                    data = data.map(record => {
+                        if (!record || typeof record !== 'object') return record;
+                        const remapped = applyKnownGoalAssigneeAliases(record, users);
+                        if (remapped !== record) {
+                            updated = true;
+                            record = remapped;
+                        }
+                        const email = emailForStoredOwnerName(record.user || record.author, users);
+                        if (!email || normalizeEmail(record.email) === email) return record;
+                        updated = true;
+                        return { ...record, email };
+                    });
+                } catch (e) {
+                    console.warn("Could not sync goal owner emails from users database:", e);
+                }
+            }
+
             if (updated) {
                 try {
                     await withTimeout(setDoc(docRef, { data: data }), 10000);
@@ -279,6 +326,13 @@ window.FirebaseDB = {
         }
         try {
             let listToSave = data;
+            if (moduleName === 'goals' && Array.isArray(data)) {
+                listToSave = data.map(record => {
+                    if (!record || typeof record !== 'object') return record;
+                    const { title, ...rest } = record;
+                    return rest;
+                });
+            }
             const docRef = doc(db, "modules", moduleName);
             await withTimeout(setDoc(docRef, { data: listToSave }), 10000);
             return true;
@@ -290,7 +344,7 @@ window.FirebaseDB = {
 };
 
 // Intercept fetch API calls to replace the Node.js server
-const collections = ['skills', 'procedures', 'goals', 'calendar', 'meetings', 'messages', 'apps', 'profile', 'auth', 'glossary', 'settings', 'pending_skills', 'pending_procedures', 'pending_goals', 'pending_calendar', 'pending_meetings', 'pending_messages', 'pending_apps', 'pending_profile', 'pending_glossary', 'role_access'];
+const collections = ['skills', 'procedures', 'goals', 'calendar', 'meetings', 'messages', 'apps', 'profile', 'auth', 'settings', 'pending_skills', 'pending_procedures', 'pending_goals', 'pending_calendar', 'pending_meetings', 'pending_messages', 'pending_apps', 'pending_profile', 'role_access'];
 const originalFetch = window.fetch;
 
 function safeEquals(a, b) {
@@ -324,12 +378,122 @@ function safeEquals(a, b) {
     return false;
 }
 
+function isDocumentsOnlyChange(oldItem, newItem) {
+    const keys = new Set([...Object.keys(oldItem || {}), ...Object.keys(newItem || {})]);
+    for (const key of keys) {
+        if (key === 'documents') continue;
+        if (!safeEquals(oldItem[key], newItem[key])) return false;
+    }
+    return true;
+}
+
+function isDocumentsChangeAuthorized(oldItem, newItem, actorName) {
+    const actor = (actorName || '').toLowerCase();
+    const recordOwner = (oldItem.author || '').toLowerCase();
+    const isRecordOwner = !!(actor && recordOwner && actor === recordOwner);
+    const oldDocs = Array.isArray(oldItem.documents) ? oldItem.documents : [];
+    const newDocs = Array.isArray(newItem.documents) ? newItem.documents : [];
+
+    for (const od of oldDocs) {
+        const nd = newDocs.find(d => String(d.id) === String(od.id));
+        const postedBy = (od.postedBy || '').toLowerCase();
+        const ownsDoc = !!(actor && postedBy && actor === postedBy);
+        if (!nd) {
+            if (!ownsDoc && !isRecordOwner) return false;
+            continue;
+        }
+        if (!safeEquals(od, nd) && !ownsDoc) return false;
+    }
+    for (const nd of newDocs) {
+        const existed = oldDocs.some(d => String(d.id) === String(nd.id));
+        if (existed) continue;
+        if ((nd.postedBy || '').toLowerCase() !== actor) return false;
+    }
+    return true;
+}
+
+function normalizeEmail(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+const GOAL_EMAIL_ALIASES = {
+    'kmulei@kabarak.ac.ke': 'dmulei001@outlook.com',
+    '2103334@students.kcau.ac.ke': 'kakaiphil@gmail.com'
+};
+
+function profileForEmail(email, users) {
+    const key = normalizeEmail(email);
+    if (!key) return null;
+    const list = Array.isArray(users) ? users : [];
+    return list.find(u => normalizeEmail(u.email) === key) || null;
+}
+
+function applyKnownGoalAssigneeAliases(record, users) {
+    if (!record || typeof record !== 'object') return record;
+    const storedEmail = normalizeEmail(record.email);
+    const storedUser = normalizeEmail(record.user);
+    const nextEmail = GOAL_EMAIL_ALIASES[storedEmail] || GOAL_EMAIL_ALIASES[storedUser];
+    if (!nextEmail) return record;
+    const profile = profileForEmail(nextEmail, users);
+    const nextName = (profile && profile.name && profile.name.trim())
+        ? profile.name.trim()
+        : (GOAL_EMAIL_ALIASES[storedUser] ? nextEmail : (record.user || nextEmail));
+    if (storedEmail === nextEmail && record.user === nextName) return record;
+    return { ...record, email: nextEmail, user: nextName };
+}
+
+function normalizePersonName(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+function uniqueUserForOwnerName(ownerName, users) {
+    const key = normalizePersonName(ownerName);
+    if (!key) return null;
+    const list = Array.isArray(users) ? users.filter(u => u && u.email) : [];
+    const matches = list.filter(u => normalizePersonName(u.name) === key);
+    return matches.length === 1 ? matches[0] : null;
+}
+
+function emailForStoredOwnerName(ownerName, users) {
+    const user = uniqueUserForOwnerName(ownerName, users);
+    return user ? normalizeEmail(user.email) : '';
+}
+
+function resolveGoalRecordEmail(record, users) {
+    if (!record) return '';
+    const fromStoredName = emailForStoredOwnerName(record.user || record.author, users);
+    if (fromStoredName) return fromStoredName;
+    return normalizeEmail(record.email);
+}
+
+function actorOwnsGoalRecord(record, actor, users) {
+    const actorEmail = normalizeEmail(actor && actor.email);
+    const recordEmail = resolveGoalRecordEmail(record, users);
+    if (actorEmail && recordEmail && actorEmail === recordEmail) return true;
+    const ownerKey = normalizePersonName(record && (record.user || record.author));
+    const actorName = normalizePersonName(actor && actor.name);
+    return !!(ownerKey && actorName && ownerKey === actorName);
+}
+
+function actorCanManageGoalRecord(record, actor, users) {
+    if (actorOwnsGoalRecord(record, actor, users)) return true;
+    const actorEmail = normalizeEmail(actor && actor.email);
+    const createdByEmail = normalizeEmail(record && record.createdByEmail);
+    if (actorEmail && createdByEmail && actorEmail === createdByEmail) return true;
+    const createdBy = normalizePersonName(record && record.createdBy);
+    const actorName = normalizePersonName(actor && actor.name);
+    return !!(createdBy && actorName && createdBy === actorName);
+}
+
+window.GoalUser = {
+    normalizeEmail,
+    resolveEmail: resolveGoalRecordEmail,
+    actorOwnsRecord: actorOwnsGoalRecord,
+    actorCanManageRecord: actorCanManageGoalRecord
+};
+
 function goalRecordActorCanModify(oldItem, actor) {
-    const actorName = (actor && actor.name ? actor.name : '').trim().toLowerCase();
-    if (!actorName) return false;
-    const owner = (oldItem.user || oldItem.author || '').trim().toLowerCase();
-    const createdBy = (oldItem.createdBy || '').trim().toLowerCase();
-    return owner === actorName || createdBy === actorName;
+    return actorCanManageGoalRecord(oldItem, actor, []);
 }
 
 window.fetch = async function (...args) {
@@ -427,11 +591,12 @@ window.fetch = async function (...args) {
                 if (options && options.method === 'POST') {
                     const body = JSON.parse(options.body);
 
-                    if (['skills', 'procedures', 'goals', 'calendar', 'meetings', 'messages', 'apps', 'glossary'].includes(path)) {
+                    if (['skills', 'procedures', 'goals', 'calendar', 'meetings', 'messages', 'apps'].includes(path)) {
                         const actor = window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
                         const oldCollection = await window.FirebaseDB.getCollection(path);
+                        const skipOwnerGuard = isAdminModule && path === 'goals';
 
-                        const isUnauthorized = oldCollection.some(oldItem => {
+                        const isUnauthorized = !skipOwnerGuard && oldCollection.some(oldItem => {
                             if (path === 'goals') {
                                 if (goalRecordActorCanModify(oldItem, actor)) return false;
                                 const owner = oldItem.user || oldItem.author;
@@ -450,7 +615,9 @@ window.fetch = async function (...args) {
                                 }
                                 const keys = new Set([...Object.keys(oldItem), ...Object.keys(newItem)]);
                                 for (const key of keys) {
-                                    if (key === 'tickets') {
+                                    if (key === 'documents') {
+                                        if (!isDocumentsChangeAuthorized(oldItem, newItem, actor.name)) return true;
+                                    } else if (key === 'tickets') {
                                         const oldTickets = oldItem.tickets || [];
                                         const newTickets = newItem.tickets || [];
 
@@ -590,7 +757,17 @@ window.fetch = async function (...args) {
 
                     // Specify modules that must undergo admin review
                     // Secure messages publish immediately — no admin approval queue
-                    const requiresApproval = ['skills', 'procedures', 'calendar', 'meetings', 'apps', 'glossary'];
+                    const requiresApproval = ['skills', 'procedures', 'calendar', 'meetings', 'apps'];
+
+                    const documentOnlyEdits = (path === 'calendar' || path === 'meetings')
+                        && created.length === 0
+                        && edited.length > 0
+                        && edited.every(item => isDocumentsOnlyChange(oldMap.get(String(item.id)), item));
+
+                    if (documentOnlyEdits) {
+                        await window.FirebaseDB.saveCollection(path, body);
+                        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                    }
 
                     if (requiresApproval.includes(path) && (created.length > 0 || edited.length > 0)) {
                         const pendingCol = 'pending_' + path;

@@ -22,8 +22,20 @@
             <h2 id="appNameHeader" style="margin-bottom: 5px; border-bottom: none; padding-bottom: 0">Loading...</h2>
         </div>
         <!-- Loader Section -->
-        <div id="detailLoader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; width: 100%">
-            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--accent, #6366f1)"></i>
+        <div id="detailLoader" class="detail-skeleton" aria-busy="true" aria-label="Loading app details">
+            <div class="skel-tabs">
+                <span class="skel-tab"></span>
+                <span class="skel-tab"></span>
+                <span class="skel-tab"></span>
+            </div>
+            <div class="skel-detail-card">
+                <span class="skel-line w40"></span>
+                <span class="skel-line w100"></span>
+                <span class="skel-line w100"></span>
+                <span class="skel-line w90"></span>
+                <span class="skel-line w80"></span>
+                <span class="skel-line w70"></span>
+            </div>
         </div>
 
         <!-- Content Section (Initially Hidden) -->

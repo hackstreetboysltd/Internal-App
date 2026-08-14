@@ -139,7 +139,7 @@ async function render(forceRefresh = false) {
     const loader = document.getElementById('skillsLoader');
     const content = document.getElementById('skillsContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

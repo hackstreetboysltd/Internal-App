@@ -21,7 +21,7 @@ async function loadRoleAccess() {
     const loader = document.getElementById('roleAccessLoader');
     const content = document.getElementById('roleAccessContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

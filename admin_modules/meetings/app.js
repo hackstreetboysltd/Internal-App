@@ -143,7 +143,7 @@ async function renderMeetings(forceRefresh = false) {
     const loader = document.getElementById('meetingsLoader');
     const content = document.getElementById('meetingsContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

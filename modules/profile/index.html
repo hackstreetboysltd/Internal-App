@@ -339,15 +339,116 @@
         <!-- Search Bar & Actions -->
         <div class="header-actions" style="margin-bottom: 24px; display: flex; gap: 16px; align-items: center">
             <div class="search-input-wrapper" style="flex: 1">
-                <input type="text" id="searchTeammates" placeholder="Search..." oninput="renderTeammates()">
+                <input type="text" id="searchTeammates" placeholder="Enter keyword..." oninput="renderTeammates()">
             </div>
             <!-- Avatar Button opens myProfileModal -->
             <button onclick="openMyProfileModal()" class="avatar-btn" id="myProfileButton" title="My Profile"></button>
         </div>
 
         <!-- Loader Section -->
-        <div id="profileLoader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; width: 100%">
-            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--accent, #ff7a00)"></i>
+        <div id="profileLoader" class="profile-skeleton" aria-busy="true" aria-label="Loading teammates">
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
+            <div class="skel-member-card">
+                <div class="skel-member-header">
+                    <div class="skel-avatar"></div>
+                    <div class="skel-member-info">
+                        <span class="skel-line w70"></span>
+                        <span class="skel-line sm w50"></span>
+                    </div>
+                </div>
+                <div class="skel-member-bio">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w80"></span>
+                </div>
+                <div class="skel-member-footer">
+                    <span class="skel-pill"></span>
+                    <span class="skel-line sm w40"></span>
+                </div>
+            </div>
         </div>
 
         <!-- Content Section (Initially Hidden) -->

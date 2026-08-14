@@ -133,7 +133,7 @@ async function render(forceRefresh = false) {
     const loader = document.getElementById('proceduresLoader');
     const content = document.getElementById('proceduresContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

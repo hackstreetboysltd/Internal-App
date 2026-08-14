@@ -219,7 +219,7 @@ async function renderApps() {
     const loader = document.getElementById('appsLoader');
     const content = document.getElementById('appsContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

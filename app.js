@@ -24,13 +24,11 @@ function setDynamicGreeting() {
 async function loadDashboardStats() {
     const modules = [
         { key: 'apps', elementId: 'statApps' },
-        { key: 'meetings', elementId: 'statMeetings' },
         { key: 'messages', elementId: 'statMessages' },
         { key: 'calendar', elementId: 'statCalendar' },
         { key: 'goals', elementId: 'statGoals' },
         { key: 'skills', elementId: 'statSkills' },
         { key: 'procedures', elementId: 'statProcedures' },
-        { key: 'glossary', elementId: 'statGlossary' },
         { key: 'profile', elementId: 'statProfile' }
     ];
 
@@ -72,6 +70,18 @@ async function loadDashboardStats() {
                 } else {
                     el.textContent = data.length;
                 }
+            } else if (mod.key === 'calendar') {
+                let meetingCount = 0;
+                try {
+                    const meetingRes = await fetch('/api/meetings');
+                    if (meetingRes.ok) {
+                        const meetingData = await meetingRes.json();
+                        meetingCount = Array.isArray(meetingData) ? meetingData.length : 0;
+                    }
+                } catch (e) {
+                    meetingCount = 0;
+                }
+                el.textContent = (Array.isArray(data) ? data.length : 0) + meetingCount;
             } else {
                 el.textContent = data.length;
             }
@@ -88,6 +98,10 @@ function setModuleChrome(isModuleOpen) {
 }
 
 function loadModule(folderName, displayName) {
+    if (folderName === 'meetings') {
+        folderName = 'calendar';
+        displayName = 'Calendar';
+    }
     const iframe = document.getElementById('moduleFrame');
     const welcomeScreen = document.getElementById('welcomeScreen');
 

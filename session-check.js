@@ -132,7 +132,6 @@
     // Pre-populate and secure author/name fields
     function secureNameFields() {
         const nameFields = [
-            'termAuthor', 'editTermAuthor', // glossary
             'contribName', 'editSkillAuthor', // skills
             'mAuthor', 'editMAuthor', // meetings and messages
             'procAuthor', 'editProcAuthor', // procedures

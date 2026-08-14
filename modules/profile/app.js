@@ -19,7 +19,7 @@ async function loadProfiles() {
     const loader = document.getElementById('profileLoader');
     const content = document.getElementById('profileContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {
@@ -286,6 +286,61 @@ function closeEditProfileModal() {
     }, 300);
 }
 
+function addNameAlias(profile, alias) {
+    if (!profile || !alias) return;
+    const key = alias.trim().toLowerCase();
+    if (!key) return;
+    if ((profile.name || '').trim().toLowerCase() === key) return;
+    const aliases = Array.isArray(profile.nameAliases) ? profile.nameAliases.slice() : [];
+    if (aliases.some(a => (a || '').trim().toLowerCase() === key)) {
+        profile.nameAliases = aliases;
+        return;
+    }
+    aliases.push(alias.trim());
+    profile.nameAliases = aliases;
+}
+
+function syncSessionUser(user) {
+    if (window.top) window.top.sessionUser = user;
+    try {
+        sessionStorage.setItem('sessionUser', JSON.stringify(user));
+        if (window.top && window.top.sessionStorage) {
+            window.top.sessionStorage.setItem('sessionUser', JSON.stringify(user));
+        }
+    } catch (_) { }
+}
+
+async function rewriteGoalOwnersForProfile(email, oldName, newName) {
+    try {
+        const res = await fetch('/api/goals');
+        if (!res.ok) return;
+        const goals = await res.json();
+        if (!Array.isArray(goals)) return;
+        const emailKey = (email || '').trim().toLowerCase();
+        const oldKey = (oldName || '').trim().toLowerCase();
+        let changed = false;
+        const next = goals.map(g => {
+            if (!g) return g;
+            const recordEmail = (g.email || '').trim().toLowerCase();
+            const recordUser = (g.user || '').trim().toLowerCase();
+            const matchesEmail = emailKey && recordEmail === emailKey;
+            const matchesOldName = oldKey && recordUser === oldKey;
+            if (!matchesEmail && !matchesOldName) return g;
+            changed = true;
+            return { ...g, email: email };
+        });
+        if (changed) {
+            await fetch('/api/goals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(next)
+            });
+        }
+    } catch (e) {
+        console.warn('Could not update goal owners after profile rename:', e);
+    }
+}
+
 // Save modal changes
 async function saveProfileEdit(e) {
     e.preventDefault();
@@ -299,20 +354,24 @@ async function saveProfileEdit(e) {
 
     // Find and update current user's profile entry
     const myProfileIdx = allProfiles.findIndex(p => p.email && p.email.toLowerCase() === currentUser.email.toLowerCase());
+    const oldName = myProfileIdx !== -1 ? (allProfiles[myProfileIdx].name || '') : (currentUser.name || '');
 
     if (myProfileIdx !== -1) {
+        addNameAlias(allProfiles[myProfileIdx], oldName);
         allProfiles[myProfileIdx].name = name;
         allProfiles[myProfileIdx].role = role;
         allProfiles[myProfileIdx].department = dept;
         allProfiles[myProfileIdx].bio = bio;
     }
 
-    // Update active local session name
-    currentUser.name = name;
-    if (window.top) window.top.sessionUser = currentUser;
-
-    // Save and close
+    // Save profile first while sessionStorage still has the previous login name,
+    // so goal ownership checks can match legacy records during the rewrite.
     await saveProfilesToServer();
+    await rewriteGoalOwnersForProfile(currentUser.email, oldName, name);
+
+    currentUser.name = name;
+    syncSessionUser(currentUser);
+
     renderMyProfile(allProfiles[myProfileIdx]);
     renderTeammates();
 

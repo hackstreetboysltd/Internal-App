@@ -428,7 +428,9 @@
                     });
                 } else {
                     if (user.photoURL) profiles[idx].avatar = user.photoURL;
-                    if (user.displayName) profiles[idx].name = user.displayName;
+                    if (!profiles[idx].name) {
+                        profiles[idx].name = user.displayName || user.email.split('@')[0];
+                    }
                     if (!profiles[idx].approvedStatus) {
                         profiles[idx].approvedStatus = 'pending';
                     }
@@ -446,11 +448,7 @@
         // ── Shared: save session and go to app ────────────────────────────────
         const originalBtnHTML = document.getElementById('googleLoginBtn')?.innerHTML || '';
         async function finishLogin(user) {
-            const sessionUser = {
-                name: user.displayName, email: user.email,
-                expiry: Date.now() + 60 * 60 * 1000,
-                avatar: user.photoURL || 'custom'
-            };
+            let sessionName = user.displayName || (user.email ? user.email.split('@')[0] : 'A Team Member');
             try {
                 const profRes = await fetch('/api/profile');
                 let profiles  = profRes.ok ? await profRes.json() : [];
@@ -465,13 +463,31 @@
                     });
                 } else {
                     if (user.photoURL) profiles[idx].avatar = user.photoURL;
-                    if (!profiles[idx].name) profiles[idx].name = user.displayName;
+                    if (!profiles[idx].name) {
+                        profiles[idx].name = user.displayName;
+                    } else {
+                        sessionName = profiles[idx].name;
+                        const googleName = (user.displayName || '').trim();
+                        const profileName = (profiles[idx].name || '').trim();
+                        if (googleName && googleName.toLowerCase() !== profileName.toLowerCase()) {
+                            const aliases = Array.isArray(profiles[idx].nameAliases) ? profiles[idx].nameAliases : [];
+                            if (!aliases.some(a => (a || '').trim().toLowerCase() === googleName.toLowerCase())) {
+                                aliases.push(googleName);
+                                profiles[idx].nameAliases = aliases;
+                            }
+                        }
+                    }
                 }
                 await fetch('/api/profile', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(profiles)
                 });
             } catch (e) { console.warn('Profile sync skipped:', e); }
+            const sessionUser = {
+                name: sessionName, email: user.email,
+                expiry: Date.now() + 60 * 60 * 1000,
+                avatar: user.photoURL || 'custom'
+            };
             const sessionStr = encodeURIComponent(JSON.stringify(sessionUser));
             window.location.replace('index.html?session=' + sessionStr);
         }

@@ -223,49 +223,117 @@ window.showConfirm = function (title, message) {
     });
 };
 
-let cachedProfilesList = [];
+let cachedUsersList = [];
 let activeEditingGoalId = null;
+let reassigningRecordId = null;
 
-async function fetchProfilesList() {
+async function fetchUsersList() {
     try {
         const res = await fetch('/api/profile');
         if (res.ok) {
-            cachedProfilesList = await res.json();
-            if (!Array.isArray(cachedProfilesList)) {
-                cachedProfilesList = [];
+            cachedUsersList = await res.json();
+            if (!Array.isArray(cachedUsersList)) {
+                cachedUsersList = [];
             }
         }
     } catch (e) {
-        console.error('Failed to load profiles list:', e);
+        console.error('Failed to load users database:', e);
+        cachedUsersList = [];
     }
 }
 
-function populateAssigneeDropdown() {
-    const select = document.getElementById('assigneeSelect');
+function currentActor() {
+    return window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
+}
+
+function goalEmail(record) {
+    if (window.GoalUser) {
+        return window.GoalUser.resolveEmail(record, cachedUsersList);
+    }
+    return (record && record.email ? record.email : '').trim().toLowerCase();
+}
+
+function goalDisplayName(record) {
+    return (record && record.user) || 'Unknown';
+}
+
+function actorOwnsGoal(record) {
+    if (window.GoalUser) {
+        return window.GoalUser.actorOwnsRecord(record, currentActor(), cachedUsersList);
+    }
+    const actor = currentActor();
+    const recordUser = (record && record.user ? record.user : '').trim().toLowerCase();
+    const actorName = (actor.name || '').trim().toLowerCase();
+    return recordUser !== '' && recordUser === actorName;
+}
+
+function actorCanManageGoal(record) {
+    if (window.GoalUser) {
+        return window.GoalUser.actorCanManageRecord(record, currentActor(), cachedUsersList);
+    }
+    return actorOwnsGoal(record);
+}
+
+function fillEmailSelect(select, emails, selectedValue) {
     if (!select) return;
     select.innerHTML = '';
-    
-    // Sort profiles by name
-    const sortedProfiles = [...cachedProfilesList].sort((a, b) => {
-        const nameA = (a.name || '').toLowerCase();
-        const nameB = (b.name || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-    });
-    
-    if (sortedProfiles.length === 0) {
+    const unique = [...new Set((emails || []).map(e => (e || '').trim().toLowerCase()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+
+    if (unique.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
-        opt.innerText = 'No profiles loaded';
+        opt.innerText = 'No users loaded';
         select.appendChild(opt);
         return;
     }
-    
-    sortedProfiles.forEach(p => {
+
+    unique.forEach(email => {
         const opt = document.createElement('option');
-        opt.value = p.name;
-        opt.innerText = `${p.name} (${p.email})`;
+        opt.value = email;
+        opt.innerText = email;
         select.appendChild(opt);
     });
+
+    if (selectedValue && unique.includes(selectedValue)) {
+        select.value = selectedValue;
+    }
+}
+
+function directoryEmails() {
+    return cachedUsersList
+        .map(u => (u.email || '').trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function profileNameForEmail(email) {
+    const key = (email || '').trim().toLowerCase();
+    const match = cachedUsersList.find(u => (u.email || '').trim().toLowerCase() === key);
+    return (match && match.name && match.name.trim()) ? match.name.trim() : key;
+}
+
+function isPersonalGoalRecord(record) {
+    return !!(record && record.scope !== 'global' && !record.pendingId);
+}
+
+function recordBelongsToEmail(record, email) {
+    const key = (email || '').trim().toLowerCase();
+    if (!key || !record) return false;
+    if (goalEmail(record) === key) return true;
+    if ((record.email || '').trim().toLowerCase() === key) return true;
+    if ((record.user || '').trim().toLowerCase() === key) return true;
+    return false;
+}
+
+function populateAssigneeDropdown(extraEmail) {
+    const select = document.getElementById('assigneeSelect');
+    if (!select) return;
+    const emails = directoryEmails();
+    const extra = (extraEmail || '').trim().toLowerCase();
+    if (extra && !emails.includes(extra)) {
+        emails.push(extra);
+    }
+    fillEmailSelect(select, emails, extra);
 }
 
 function initScopeRadioListeners() {
@@ -283,7 +351,6 @@ function initScopeRadioListeners() {
 window.handleOpenUnifiedModal = function () {
     activeEditingGoalId = null;
     
-    document.getElementById('goalTitle').value = '';
     document.getElementById('goalItemInput').innerHTML = ''; // cleared contenteditable
     document.getElementById('modalItemsList').innerHTML = '';
     hideAppDropdown();
@@ -299,34 +366,26 @@ window.handleOpenUnifiedModal = function () {
     // Populate dropdown with latest profiles
     populateAssigneeDropdown();
 
-    const titleFieldContainer = document.getElementById('titleFieldContainer');
-    const titleFieldLabel = document.getElementById('titleFieldLabel');
     const itemsLabel = document.getElementById('itemsLabel');
     const headerTitle = document.getElementById('unifiedModalTitle');
+    const assigneeLabel = document.getElementById('assigneeSelectLabel');
+    const saveBtn = document.getElementById('saveGoalBtn');
 
     const typeLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
     headerTitle.innerText = `Set ${typeLabel} Goal`;
+    if (assigneeLabel) assigneeLabel.innerText = 'Assign Goal To';
+    if (saveBtn) saveBtn.innerText = 'Commit Goal';
 
-    // Toggle specific fields dynamically based on the current active tab
-    if (['annual', 'quarterly', 'monthly'].includes(currentTab)) {
-        titleFieldContainer.style.display = 'block';
-        if (currentTab === 'annual') {
-            titleFieldLabel.innerText = 'Annual Objective / Theme';
-            itemsLabel.innerText = 'Yearly Commitments';
-        } else if (currentTab === 'quarterly') {
-            titleFieldLabel.innerText = 'Quarterly Focus Area';
-            itemsLabel.innerText = 'Quarterly Commitments';
-        } else {
-            titleFieldLabel.innerText = 'Monthly Theme';
-            itemsLabel.innerText = 'Monthly Commitments';
-        }
+    if (currentTab === 'annual') {
+        itemsLabel.innerText = 'Yearly Commitments';
+    } else if (currentTab === 'quarterly') {
+        itemsLabel.innerText = 'Quarterly Commitments';
+    } else if (currentTab === 'monthly') {
+        itemsLabel.innerText = 'Monthly Commitments';
+    } else if (currentTab === 'weekly') {
+        itemsLabel.innerText = 'Weekly Commitments';
     } else {
-        titleFieldContainer.style.display = 'none';
-        if (currentTab === 'weekly') {
-            itemsLabel.innerText = 'Weekly Commitments';
-        } else {
-            itemsLabel.innerText = 'Daily Commitments';
-        }
+        itemsLabel.innerText = 'Daily Commitments';
     }
 
     openGoalModal();
@@ -334,20 +393,28 @@ window.handleOpenUnifiedModal = function () {
 
 window.saveUnifiedGoal = async function () {
     const actor = window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
-    const title = document.getElementById('goalTitle').value.trim();
     const itemsArray = getGoalsFromList('modalItemsList');
     
     // Capture scope selection
     const scopeElement = document.querySelector('input[name="goalScope"]:checked');
     const scope = scopeElement ? scopeElement.value : 'personal';
 
-    // Get selected assignee if scope is personal
+    // Get selected assignee if scope is personal — identity is email, name is display only
     let targetUser = actor.name || 'Anonymous';
+    let targetEmail = (actor.email || '').trim().toLowerCase();
     let isAssigned = false;
     if (scope === 'personal') {
         const assigneeSelect = document.getElementById('assigneeSelect');
         if (assigneeSelect && assigneeSelect.value) {
-            targetUser = assigneeSelect.value;
+            const selectedEmail = assigneeSelect.value.trim().toLowerCase();
+            const selectedUser = cachedUsersList.find(u => (u.email || '').trim().toLowerCase() === selectedEmail);
+            if (selectedUser) {
+                targetUser = (selectedUser.name || '').trim() || selectedEmail;
+                targetEmail = selectedEmail;
+            } else {
+                targetUser = profileNameForEmail(selectedEmail) || selectedEmail;
+                targetEmail = selectedEmail;
+            }
             isAssigned = true;
         } else {
             await showAlert('Validation Error', 'Please select a profile to assign the goal to.');
@@ -377,20 +444,10 @@ window.saveUnifiedGoal = async function () {
         if (!type) {
             type = record.weekId ? 'weekly' : 'annual';
         }
-        if (type === 'annual' && !title) {
-            await showAlert('Validation Error', 'Please enter your Annual Objective/Theme.');
-            return;
-        } else if (type === 'quarterly' && !title) {
-            await showAlert('Validation Error', 'Please enter your Quarterly Focus Area.');
-            return;
-        } else if (type === 'monthly' && !title) {
-            await showAlert('Validation Error', 'Please enter your Monthly Theme.');
-            return;
-        }
 
         const originalGoals = record.goals || [];
         const wasAssigned = !!record.assignedByAdmin;
-        const previousAssignee = (record.user || '').trim();
+        const previousAssigneeEmail = goalEmail(record);
         const updatedGoals = itemsArray.map(text => {
             const match = originalGoals.find(og => og.text.toLowerCase() === text.toLowerCase());
             return {
@@ -399,30 +456,34 @@ window.saveUnifiedGoal = async function () {
             };
         });
 
-        record.title = title || '';
         record.goals = updatedGoals;
         record.scope = scope;
+        delete record.title;
         if (scope === 'personal') {
             record.user = targetUser;
+            record.email = targetEmail;
             record.assignedByAdmin = isAssigned;
             record.createdBy = actor.name;
+            record.createdByEmail = (actor.email || '').trim().toLowerCase();
         } else {
             record.user = actor.name;
+            record.email = (actor.email || '').trim().toLowerCase();
             delete record.assignedByAdmin;
             delete record.createdBy;
+            delete record.createdByEmail;
         }
 
         await saveGoals(currentDB);
 
         const assigneeChanged = isAssigned && (
             !wasAssigned ||
-            previousAssignee.toLowerCase() !== (targetUser || '').trim().toLowerCase()
+            previousAssigneeEmail !== (targetEmail || '').trim().toLowerCase()
         );
         if (assigneeChanged && window.notifyAssigneeOfGoal) {
             await window.notifyAssigneeOfGoal({
                 assigneeName: targetUser,
+                assigneeEmail: targetEmail,
                 actorName: actor.name,
-                goalTitle: record.title,
                 goalType: type,
                 periodId: record.periodId,
                 action: wasAssigned ? 'updated' : 'assigned'
@@ -448,24 +509,12 @@ window.saveUnifiedGoal = async function () {
 
     if (currentTab === 'annual') {
         periodId = `${now.getFullYear()}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Annual Objective/Theme.');
-            return;
-        }
     } else if (currentTab === 'quarterly') {
         const quarter = Math.floor(now.getMonth() / 3) + 1;
         periodId = `${now.getFullYear()}-Q${quarter}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Quarterly Focus Area.');
-            return;
-        }
     } else if (currentTab === 'monthly') {
         const month = String(now.getMonth() + 1).padStart(2, '0');
         periodId = `${now.getFullYear()}-M${month}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Monthly Theme.');
-            return;
-        }
     } else if (currentTab === 'weekly') {
         periodId = getWeekIdentifier(now);
     } else if (currentTab === 'daily') {
@@ -475,7 +524,7 @@ window.saveUnifiedGoal = async function () {
     const record = {
         id: Date.now(),
         user: targetUser,
-        title: title || '',
+        email: targetEmail,
         goals: itemsArray.map(item => ({ text: item, done: false })),
         weekId: currentTab === 'weekly' ? periodId : null, // keep backward compatibility
         periodId: periodId,
@@ -485,6 +534,7 @@ window.saveUnifiedGoal = async function () {
     if (isAssigned) {
         record.assignedByAdmin = true;
         record.createdBy = actor.name;
+        record.createdByEmail = (actor.email || '').trim().toLowerCase();
     }
 
     currentDB.push(record);
@@ -493,8 +543,8 @@ window.saveUnifiedGoal = async function () {
     if (isAssigned && window.notifyAssigneeOfGoal) {
         await window.notifyAssigneeOfGoal({
             assigneeName: targetUser,
+            assigneeEmail: targetEmail,
             actorName: actor.name,
-            goalTitle: record.title,
             goalType: currentTab,
             periodId: record.periodId,
             action: 'assigned'
@@ -522,7 +572,6 @@ window.editCurrentGoal = async function (recordId) {
     const record = data.find(r => r.id === recordId);
     if (!record) return;
 
-    document.getElementById('goalTitle').value = record.title || '';
     document.getElementById('goalItemInput').innerHTML = '';
     hideAppDropdown();
 
@@ -538,13 +587,18 @@ window.editCurrentGoal = async function (recordId) {
         container.style.display = scopeVal === 'personal' ? 'block' : 'none';
     }
 
-    // Populate drop down before setting its value
-    populateAssigneeDropdown();
+    // Populate drop down before setting its value, keeping the current assignee even if they left the directory
+    populateAssigneeDropdown(goalEmail(record));
 
     const assigneeSelect = document.getElementById('assigneeSelect');
     if (assigneeSelect) {
-        assigneeSelect.value = record.user || '';
+        assigneeSelect.value = goalEmail(record) || '';
     }
+
+    const assigneeLabel = document.getElementById('assigneeSelectLabel');
+    const saveBtn = document.getElementById('saveGoalBtn');
+    if (assigneeLabel) assigneeLabel.innerText = 'Reassign Goal To';
+    if (saveBtn) saveBtn.innerText = 'Save Changes';
 
     const list = document.getElementById('modalItemsList');
     list.innerHTML = '';
@@ -553,8 +607,6 @@ window.editCurrentGoal = async function (recordId) {
         list.appendChild(li);
     });
 
-    const titleFieldContainer = document.getElementById('titleFieldContainer');
-    const titleFieldLabel = document.getElementById('titleFieldLabel');
     const itemsLabel = document.getElementById('itemsLabel');
     const headerTitle = document.getElementById('unifiedModalTitle');
 
@@ -570,25 +622,16 @@ window.editCurrentGoal = async function (recordId) {
     const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
     headerTitle.innerText = `Edit ${capitalizedType} Goal`;
 
-    if (['annual', 'quarterly', 'monthly'].includes(type)) {
-        titleFieldContainer.style.display = 'block';
-        if (type === 'annual') {
-            titleFieldLabel.innerText = 'Annual Objective / Theme';
-            itemsLabel.innerText = 'Yearly Commitments';
-        } else if (type === 'quarterly') {
-            titleFieldLabel.innerText = 'Quarterly Focus Area';
-            itemsLabel.innerText = 'Quarterly Commitments';
-        } else {
-            titleFieldLabel.innerText = 'Monthly Theme';
-            itemsLabel.innerText = 'Monthly Commitments';
-        }
+    if (type === 'annual') {
+        itemsLabel.innerText = 'Yearly Commitments';
+    } else if (type === 'quarterly') {
+        itemsLabel.innerText = 'Quarterly Commitments';
+    } else if (type === 'monthly') {
+        itemsLabel.innerText = 'Monthly Commitments';
+    } else if (type === 'weekly') {
+        itemsLabel.innerText = 'Weekly Commitments';
     } else {
-        titleFieldContainer.style.display = 'none';
-        if (type === 'weekly') {
-            itemsLabel.innerText = 'Weekly Commitments';
-        } else {
-            itemsLabel.innerText = 'Daily Commitments';
-        }
+        itemsLabel.innerText = 'Daily Commitments';
     }
 
     openGoalModal();
@@ -848,7 +891,7 @@ async function toggleGoal(recordId, goalIndex) {
     const data = await getGoals();
     const item = data.find(r => r.id === recordId);
     if (item) {
-        if (item.user.toLowerCase() !== actor.name.toLowerCase()) {
+        if (!actorOwnsGoal(item)) {
             alert("Permission Denied: You can only modify your own goals.");
             return;
         }
@@ -862,13 +905,7 @@ async function deleteRecord(recordId) {
     const data = await getGoals(true);
     const deletedRecord = data.find(r => r.id === recordId);
     
-    const recordUser = (deletedRecord && deletedRecord.user && typeof deletedRecord.user === 'string') ? deletedRecord.user.toLowerCase() : '';
-    const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-    const createdBy = (deletedRecord && deletedRecord.createdBy && typeof deletedRecord.createdBy === 'string')
-        ? deletedRecord.createdBy.toLowerCase() : '';
-    const isOwner = (recordUser !== '' && recordUser === actorName) || (createdBy !== '' && createdBy === actorName);
-
-    if (deletedRecord && !isOwner) {
+    if (deletedRecord && !actorCanManageGoal(deletedRecord)) {
         alert("Permission Denied: You can only delete your own goals or goals you assigned.");
         return;
     }
@@ -936,7 +973,7 @@ async function render(forceRefresh = false) {
     const loader = document.getElementById('goalsLoader');
     const content = document.getElementById('goalsContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {
@@ -973,7 +1010,7 @@ async function render(forceRefresh = false) {
         const resolvedPeriod = record.periodId || record.weekId || 'Target';
         const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
 
-        const userMatch = record.user ? record.user.toLowerCase().includes(searchQuery) : false;
+        const userMatch = goalEmail(record).includes(searchQuery);
         const goalMatch = record.goals ? record.goals.some(g => g.text.toLowerCase().includes(searchQuery)) : false;
         const weekMatch = resolvedPeriod ? resolvedPeriod.toLowerCase().includes(searchQuery) : false;
         const typeMatch = capitalizedType ? capitalizedType.toLowerCase().includes(searchQuery) : false;
@@ -1017,7 +1054,6 @@ async function render(forceRefresh = false) {
                 type = 'annual';
             }
 
-            const resolvedPeriod = record.periodId || record.weekId || 'Target';
             const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
             const displayTitle = (record.title && record.title.trim()) ? formatGoalText(record.title) : capitalizedType;
 
@@ -1025,15 +1061,17 @@ async function render(forceRefresh = false) {
             const completedCount = record.goals.filter(g => g.done).length;
             const pct = Math.round((completedCount / totalGoalsCount) * 100);
             
-            const actor = window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
-            const recordUser = (record.user && typeof record.user === 'string') ? record.user.toLowerCase() : '';
-            const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-            const createdBy = (record.createdBy && typeof record.createdBy === 'string') ? record.createdBy.toLowerCase() : '';
-            const isOwner = (recordUser !== '' && recordUser === actorName) || (createdBy !== '' && createdBy === actorName);
+            const isOwner = actorCanManageGoal(record);
             
             const editButton = isOwner ? `
                 <button class="secondary-btn" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(251,113,133,0.1); color:#fb7185; margin-bottom:0;" onclick="event.stopPropagation(); editCurrentGoal(${record.id})">
                     <i class="fa-solid fa-pen"></i>
+                </button>
+            ` : '';
+
+            const reassignButton = (!record.pendingId && record.scope !== 'global') ? `
+                <button class="secondary-btn" title="Reassign to another user" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(251,113,133,0.1); color:#fb7185; margin-bottom:0;" onclick="event.stopPropagation(); handleOpenReassignModal(${record.id})">
+                    <i class="fa-solid fa-user-pen"></i>
                 </button>
             ` : '';
             
@@ -1061,14 +1099,6 @@ async function render(forceRefresh = false) {
                 } else {
                     pendingBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Pending Global</span>`;
                 }
-            } else {
-                const scopeBadge = record.scope === 'global' ? 
-                    `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Global</span>` : 
-                    (record.assignedByAdmin ?
-                        `<span style="background: rgba(244, 63, 94, 0.15); color: #fb7185; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal (Assigned)</span>` :
-                        `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal</span>`
-                    );
-                pendingBadge = scopeBadge;
             }
             
             const card = document.createElement('div');
@@ -1083,12 +1113,13 @@ async function render(forceRefresh = false) {
                     <h4 style="margin:0; color:white; font-size:0.95rem; font-weight:600;">${displayTitle}</h4>
                     <div style="display:flex; align-items:center; gap:4px;">
                         ${actionButtons}
+                        ${reassignButton}
                         ${editButton}
                         ${deleteButton}
                     </div>
                 </div>
                 <p style="font-size:0.75rem; color:#9ca3af; margin:0 0 10px 0; display: flex; align-items: center; gap: 4px;">
-                    <span>${record.user} • ${resolvedPeriod}</span>
+                    <span>${capitalizedType} • ${goalEmail(record) || 'Unknown'}</span>
                     ${pendingBadge}
                 </p>
                 <div class="infographics-bar" style="height:6px; margin: 10px 0;">
@@ -1129,9 +1160,10 @@ async function render(forceRefresh = false) {
 
     const userStats = {};
     data.forEach(r => {
-        if (!userStats[r.user]) userStats[r.user] = { attempted: 0, completed: 0 };
-        userStats[r.user].attempted += r.goals.length;
-        userStats[r.user].completed += r.goals.filter(g => g.done).length;
+        const key = goalEmail(r) || r.user || 'unknown';
+        if (!userStats[key]) userStats[key] = { attempted: 0, completed: 0, name: key };
+        userStats[key].attempted += r.goals.length;
+        userStats[key].completed += r.goals.filter(g => g.done).length;
     });
 
     const sortedUsers = Object.entries(userStats).sort((a,b) => b[1].completed - a[1].completed);
@@ -1167,7 +1199,7 @@ async function render(forceRefresh = false) {
         entry.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px;">
                 ${rankBadge}
-                <strong style="color:white; font-size:0.95rem;">${username}</strong>
+                <strong style="color:white; font-size:0.95rem;">${stats.name || username}</strong>
             </div>
             <div style="text-align:right;">
                 <div style="font-size:0.9rem; font-weight:600; color:#10b981;">${pct}% Met</div>
@@ -1221,6 +1253,183 @@ window.closeGoalModal = function () {
     setTimeout(() => {
         modal.style.display = 'none';
     }, 300);
+};
+
+function personalGoalsForEmail(data, email) {
+    return (data || []).filter(record => isPersonalGoalRecord(record) && recordBelongsToEmail(record, email));
+}
+
+function applyAssigneeToRecord(record, targetEmail, actor) {
+    record.user = profileNameForEmail(targetEmail);
+    record.email = targetEmail;
+    record.assignedByAdmin = true;
+    record.createdBy = actor.name;
+    record.createdByEmail = (actor.email || '').trim().toLowerCase();
+    record.scope = 'personal';
+}
+
+window.handleOpenReassignModal = async function (recordId) {
+    if (recordId && (typeof recordId === 'object' || recordId === true)) {
+        recordId = null;
+    }
+    reassigningRecordId = recordId || null;
+    const data = await getGoals();
+    const fromSelect = document.getElementById('reassignFromSelect');
+    const toSelect = document.getElementById('reassignToSelect');
+    const fromRow = document.getElementById('reassignFromRow');
+    const title = document.getElementById('reassignModalTitle');
+
+    fillEmailSelect(toSelect, directoryEmails());
+
+    if (recordId) {
+        const record = data.find(r => String(r.id) === String(recordId));
+        if (!record) {
+            await showAlert('Error', 'Goal record not found.');
+            return;
+        }
+        if (fromRow) fromRow.style.display = 'none';
+        if (title) title.innerText = 'Reassign Goal';
+        const current = goalEmail(record);
+        if (fromSelect) {
+            fillEmailSelect(fromSelect, current ? [current] : [], current);
+        }
+    } else {
+        if (fromRow) fromRow.style.display = 'block';
+        if (title) title.innerText = 'Reassign Goals';
+        const fromEmails = [...new Set([
+            ...directoryEmails(),
+            ...data.filter(isPersonalGoalRecord).map(r => goalEmail(r)).filter(Boolean)
+        ])];
+        fillEmailSelect(fromSelect, fromEmails);
+    }
+
+    updateReassignPreview();
+    openReassignModal();
+};
+
+function openReassignModal() {
+    const modal = document.getElementById('reassignModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    modal.offsetHeight;
+    modal.classList.add('show');
+}
+
+window.closeReassignModal = function () {
+    const modal = document.getElementById('reassignModal');
+    if (!modal) return;
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+        reassigningRecordId = null;
+    }, 300);
+};
+
+window.updateReassignPreview = async function () {
+    const preview = document.getElementById('reassignPreview');
+    if (!preview) return;
+
+    const fromEmail = (document.getElementById('reassignFromSelect')?.value || '').trim().toLowerCase();
+    const toEmail = (document.getElementById('reassignToSelect')?.value || '').trim().toLowerCase();
+    const data = await getGoals();
+
+    if (reassigningRecordId) {
+        const record = data.find(r => String(r.id) === String(reassigningRecordId));
+        const current = record ? goalEmail(record) : '';
+        if (!toEmail) {
+            preview.textContent = 'Select a user to receive this goal.';
+            return;
+        }
+        if (current && current === toEmail) {
+            preview.textContent = 'This goal is already assigned to that user.';
+            return;
+        }
+        preview.textContent = current
+            ? `This goal will move from ${current} to ${toEmail}.`
+            : `This goal will be assigned to ${toEmail}.`;
+        return;
+    }
+
+    if (!fromEmail || !toEmail) {
+        preview.textContent = 'Select a current assignee and a new assignee.';
+        return;
+    }
+    if (fromEmail === toEmail) {
+        preview.textContent = 'Choose a different user to reassign to.';
+        return;
+    }
+    const count = personalGoalsForEmail(data, fromEmail).length;
+    preview.textContent = count === 1
+        ? `1 personal goal will move from ${fromEmail} to ${toEmail}.`
+        : `${count} personal goals will move from ${fromEmail} to ${toEmail}.`;
+};
+
+window.confirmReassignGoals = async function () {
+    const actor = currentActor();
+    const fromEmail = (document.getElementById('reassignFromSelect')?.value || '').trim().toLowerCase();
+    const toEmail = (document.getElementById('reassignToSelect')?.value || '').trim().toLowerCase();
+
+    if (!toEmail) {
+        await showAlert('Validation Error', 'Please select a user to reassign to.');
+        return;
+    }
+
+    const data = await getGoals(true);
+    let targets = [];
+
+    if (reassigningRecordId) {
+        const record = data.find(r => String(r.id) === String(reassigningRecordId));
+        if (!record) {
+            await showAlert('Error', 'Goal record not found.');
+            return;
+        }
+        if (goalEmail(record) === toEmail) {
+            await showAlert('Validation Error', 'This goal is already assigned to that user.');
+            return;
+        }
+        targets = [record];
+    } else {
+        if (!fromEmail) {
+            await showAlert('Validation Error', 'Please select the user to reassign from.');
+            return;
+        }
+        if (fromEmail === toEmail) {
+            await showAlert('Validation Error', 'Choose a different user to reassign to.');
+            return;
+        }
+        targets = personalGoalsForEmail(data, fromEmail);
+        if (targets.length === 0) {
+            await showAlert('No Goals', `No personal goals found for ${fromEmail}.`);
+            return;
+        }
+    }
+
+    const confirmed = await showConfirm(
+        'Confirm Reassign',
+        targets.length === 1
+            ? `Reassign this goal to ${toEmail}?`
+            : `Reassign ${targets.length} goals from ${fromEmail} to ${toEmail}?`
+    );
+    if (!confirmed) return;
+
+    const previousEmails = new Set(targets.map(r => goalEmail(r)).filter(Boolean));
+    targets.forEach(record => applyAssigneeToRecord(record, toEmail, actor));
+    await saveGoals(data);
+
+    if (window.notifyAssigneeOfGoal && !previousEmails.has(toEmail)) {
+        const sample = targets[0];
+        await window.notifyAssigneeOfGoal({
+            assigneeName: profileNameForEmail(toEmail),
+            assigneeEmail: toEmail,
+            actorName: actor.name,
+            goalType: targets.length === 1 ? (sample.type || 'goal') : `${targets.length} personal`,
+            periodId: targets.length === 1 ? sample.periodId : '',
+            action: 'assigned'
+        });
+    }
+
+    closeReassignModal();
+    await render(true);
 };
 
 // Modal handling functions - Leaderboard Modal
@@ -1278,7 +1487,7 @@ async function renderGoalsViewContent() {
     const listElem = document.getElementById('goalsViewList');
 
     if (titleElem) {
-        titleElem.innerHTML = ` ${record.user}'s Goals`;
+        titleElem.innerHTML = ` ${goalEmail(record) || 'Unknown'}'s Goals`;
     }
 
     let type = record.type;
@@ -1290,30 +1499,28 @@ async function renderGoalsViewContent() {
     } else if (type === 'long-term') {
         type = 'annual';
     }
-    const resolvedPeriod = record.periodId || record.weekId || 'Target';
     const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
 
     const totalGoalsCount = record.goals.length || 1;
     const completedCount = record.goals.filter(g => g.done).length;
     const pct = Math.round((completedCount / totalGoalsCount) * 100);
 
-    const scopeBadge = record.pendingId ? 
-        (record.pendingType === 'goals_completed' ? 
-            `<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Completed 5 Goals</span>` : 
-            `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Pending Global</span>`) :
-        (record.scope === 'global' ? 
-            `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Global</span>` : 
-            (record.assignedByAdmin ?
-                `<span style="background: rgba(244, 63, 94, 0.15); color: #fb7185; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal (Assigned)</span>` :
-                `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal</span>`
-            ));
+    const pendingBadge = record.pendingId
+        ? (record.pendingType === 'goals_completed'
+            ? `<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Completed 5 Goals</span>`
+            : `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Pending Global</span>`)
+        : '';
 
     if (metaElem) {
+        const canReassign = !record.pendingId && record.scope !== 'global';
+        const reassignAction = canReassign
+            ? `<button class="secondary-btn" title="Reassign to another user" style="padding:4px 8px; font-size:0.75rem; width:auto; border-radius:4px; background:rgba(251,113,133,0.1); color:#fb7185; margin:8px 0 0 0;" onclick="closeGoalsViewModal(); handleOpenReassignModal(${record.id})"><i class="fa-solid fa-user-pen"></i> Reassign</button>`
+            : '';
         metaElem.innerHTML = `
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px; align-items: center;">
                 <span style="display: flex; align-items: center; gap: 4px;">
-                    <span>${capitalizedType}: <strong style="color: #fb7185;">${resolvedPeriod}</strong></span>
-                    ${scopeBadge}
+                    <span>${capitalizedType} • ${goalEmail(record) || 'Unknown'}</span>
+                    ${pendingBadge}
                 </span>
                 <span><strong>${completedCount} of ${record.goals.length} completed (${pct}%)</strong></span>
             </div>
@@ -1321,14 +1528,11 @@ async function renderGoalsViewContent() {
             <div class="infographics-bar" style="margin: 4px 0; height: 8px;">
                 <div class="infographics-fill" style="width: ${pct}%"></div>
             </div>
+            ${reassignAction}
         `;
     }
 
-    const actor = window.getSessionActor ? window.getSessionActor() : { name: 'A Team Member', email: '' };
-    const recordUser = (record.user && typeof record.user === 'string') ? record.user.toLowerCase() : '';
-    const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-    const createdBy = (record.createdBy && typeof record.createdBy === 'string') ? record.createdBy.toLowerCase() : '';
-    const isOwner = (recordUser !== '' && recordUser === actorName) || (createdBy !== '' && createdBy === actorName);
+    const isOwner = actorCanManageGoal(record);
 
     if (listElem) {
         listElem.innerHTML = record.goals.map((g, idx) => `
@@ -1354,6 +1558,7 @@ window.onclick = function (event) {
     const leaderboardModal = document.getElementById('leaderboardModal');
     const goalsViewModal = document.getElementById('goalsViewModal');
     const validationInfoModal = document.getElementById('validationInfoModal');
+    const reassignModal = document.getElementById('reassignModal');
     if (event.target === goalModal) {
         closeGoalModal();
     }
@@ -1365,6 +1570,9 @@ window.onclick = function (event) {
     }
     if (event.target === validationInfoModal) {
         closeValidationInfoModal();
+    }
+    if (event.target === reassignModal) {
+        closeReassignModal();
     }
 };
 
@@ -1449,7 +1657,7 @@ async function waitForFirebaseAndStart() {
     if (window.FirebaseDB) {
         console.log("Goals window.FirebaseDB is defined! Running render...");
         await fetchDigitalSuiteApps();
-        await fetchProfilesList();
+        await fetchUsersList();
         
         initScopeRadioListeners();
         initAppTagEventListeners();

@@ -179,9 +179,13 @@ window.showConfirm = function (title, message) {
 
 let cachedWorkspaceGoals = null;
 let cachedAppsList = []; // stores digital suite app list for mentions tagging
-let currentTab = 'annual'; // default tab
-let activeViewingId = null;
+let cachedUsersList = [];
+let cachedAllowedEmails = [];
+let currentTab = 'annual'; // type used when creating a new goal
 let activeEditingGoalId = null;
+let currentWorkspacePage = 1;
+let lastWorkspaceSearchQuery = '';
+const WORKSPACE_ITEMS_PER_PAGE = 4;
 
 async function getWorkspaceGoals(forceRefresh = false) {
     if (cachedWorkspaceGoals && !forceRefresh) {
@@ -198,22 +202,34 @@ async function getWorkspaceGoals(forceRefresh = false) {
     }
 }
 
-async function saveWorkspaceGoals(data) {
+async function saveWorkspaceGoals(data, options = {}) {
     try {
+        const sanitized = Array.isArray(data)
+            ? data.map(record => {
+                if (!record || typeof record !== 'object') return record;
+                const { title, ...rest } = record;
+                return rest;
+            })
+            : data;
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(sanitized)
         });
         if (!response.ok) throw new Error('API issue');
-        cachedWorkspaceGoals = null;
-        await renderWorkspace(true);
+        cachedWorkspaceGoals = sanitized;
+        if (!options.skipRender) {
+            cachedWorkspaceGoals = null;
+            await renderWorkspace(true);
+        }
         if (window.parent && typeof window.parent.loadDashboardStats === 'function') {
             window.parent.loadDashboardStats();
         }
+        return true;
     } catch (e) {
         console.error('Error saving goals:', e);
         await showAlert('Error', 'Failed to save data to the server.');
+        return false;
     }
 }
 
@@ -230,33 +246,254 @@ async function fetchDigitalSuiteApps() {
     }
 }
 
-// Switching tab logic
-window.switchWorkspaceTab = function (tabName) {
-    currentTab = tabName;
-    const tabs = ['annual', 'quarterly', 'monthly', 'weekly', 'daily'];
-    tabs.forEach(t => {
-        const contentEl = document.getElementById(`tab-${t}`);
-        if (contentEl) {
-            contentEl.style.display = t === tabName ? 'block' : 'none';
+async function fetchUsersList() {
+    try {
+        const res = await fetch('/api/profile');
+        if (res.ok) {
+            cachedUsersList = await res.json();
+            if (!Array.isArray(cachedUsersList)) {
+                cachedUsersList = [];
+            }
         }
-    });
+    } catch (e) {
+        console.error('Failed to load users database:', e);
+        cachedUsersList = [];
+    }
 
-    // Update tab button visual state
-    const buttons = document.querySelectorAll('.tab-btn');
-    buttons.forEach(btn => {
-        const onclickAttr = btn.getAttribute('onclick');
-        if (onclickAttr && onclickAttr.includes(`'${tabName}'`)) {
-            btn.classList.add('active');
+    try {
+        const raRes = await fetch('/api/role_access');
+        if (raRes.ok) {
+            const raData = await raRes.json();
+            const allowedRec = Array.isArray(raData) ? raData.find(r => r.id === 'allowed') : null;
+            cachedAllowedEmails = allowedRec ? allowedRec.emails || [] : [];
         } else {
-            btn.classList.remove('active');
+            cachedAllowedEmails = [];
         }
+    } catch (e) {
+        console.warn('Failed to load role access allowed list:', e);
+        cachedAllowedEmails = [];
+    }
+}
+
+function getDirectoryUsers() {
+    const normalizedAllowed = cachedAllowedEmails.map(e => (e || '').trim().toLowerCase());
+    return cachedUsersList.filter(u =>
+        u.email && normalizedAllowed.includes(u.email.trim().toLowerCase())
+    );
+}
+
+function currentActor() {
+    return window.getSessionActor ? window.getSessionActor() : { name: '', email: '' };
+}
+
+function goalEmail(record) {
+    if (window.GoalUser) {
+        return window.GoalUser.resolveEmail(record, cachedUsersList);
+    }
+    return (record && record.email ? record.email : '').trim().toLowerCase();
+}
+
+function goalDisplayName(record) {
+    return (record && record.user) || 'Unknown';
+}
+
+function actorOwnsGoal(record) {
+    if (window.GoalUser) {
+        return window.GoalUser.actorOwnsRecord(record, currentActor(), cachedUsersList);
+    }
+    const actor = currentActor();
+    const recordUser = (record && record.user ? record.user : '').trim().toLowerCase();
+    const actorName = (actor.name || '').trim().toLowerCase();
+    return recordUser !== '' && recordUser === actorName;
+}
+
+function populateMemberFilterDropdown() {
+    const select = document.getElementById('memberFilterDropdown');
+    if (!select) return;
+
+    const previousValue = select.value || 'all';
+    const teammates = [...getDirectoryUsers()]
+        .filter(p => (p.email || '').trim())
+        .sort((a, b) => a.email.localeCompare(b.email, undefined, { sensitivity: 'base' }));
+
+    select.innerHTML = '<option value="all" style="background: #0f172a">All users</option>';
+    teammates.forEach(profile => {
+        const email = profile.email.trim().toLowerCase();
+        const opt = document.createElement('option');
+        opt.value = email;
+        opt.innerText = email;
+        opt.style.background = '#0f172a';
+        select.appendChild(opt);
     });
 
-    // Adapt layout of header add button
-    const actionBtn = document.getElementById('addGoalBtn');
-    if (actionBtn) {
-        const capitalized = tabName.charAt(0).toUpperCase() + tabName.slice(1);
-        actionBtn.innerHTML = `<i class="fa-solid fa-plus"></i> New ${capitalized} Goal`;
+    const stillExists = [...select.options].some(o => o.value === previousValue);
+    select.value = stillExists ? previousValue : 'all';
+    refreshWorkspaceSelect(select);
+}
+
+function refreshWorkspaceSelect(selectEl) {
+    const wrap = selectEl && selectEl.closest ? selectEl.closest('.workspace-select') : null;
+    if (wrap && typeof wrap._renderMenu === 'function') {
+        wrap._renderMenu();
+    }
+}
+
+function initWorkspaceSelects() {
+    document.querySelectorAll('.workspace-select').forEach(wrap => {
+        const select = wrap.querySelector('select');
+        const trigger = wrap.querySelector('.workspace-select-trigger');
+        const menu = wrap.querySelector('.workspace-select-menu');
+        const label = wrap.querySelector('.workspace-select-label');
+        if (!select || !trigger || !menu || !label) return;
+
+        const renderMenu = () => {
+            menu.innerHTML = '';
+            [...select.options].forEach(opt => {
+                const item = document.createElement('div');
+                item.className = 'workspace-select-option' + (opt.value === select.value ? ' active' : '');
+                item.setAttribute('role', 'option');
+                item.dataset.value = opt.value;
+                item.textContent = opt.textContent;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (select.value !== opt.value) {
+                        select.value = opt.value;
+                        select.dispatchEvent(new Event('change'));
+                    }
+                    wrap.classList.remove('open');
+                    renderMenu();
+                });
+                menu.appendChild(item);
+            });
+            const selected = select.options[select.selectedIndex];
+            label.textContent = selected ? selected.textContent : '';
+        };
+
+        wrap._renderMenu = renderMenu;
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.workspace-select.open').forEach(other => {
+                if (other !== wrap) other.classList.remove('open');
+            });
+            wrap.classList.toggle('open');
+        });
+        renderMenu();
+    });
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.workspace-select.open').forEach(wrap => wrap.classList.remove('open'));
+    });
+}
+
+window.handleMemberFilterChange = function () {
+    currentWorkspacePage = 1;
+    renderWorkspace(false);
+};
+
+window.changeWorkspacePage = function (direction) {
+    currentWorkspacePage += direction;
+    renderWorkspace(false);
+};
+
+function getSelectedTimeframe() {
+    return document.getElementById('timeframeFilterDropdown')?.value || 'all';
+}
+
+let workspaceSortDir = 'desc';
+
+function getGoalCreatedTime(record) {
+    if (record && record.createdAt) {
+        const parsed = new Date(record.createdAt).getTime();
+        if (!Number.isNaN(parsed)) return parsed;
+    }
+    const id = Number(record && record.id);
+    return Number.isNaN(id) ? 0 : id;
+}
+
+function formatGoalCreatedStamp(record) {
+    const ms = getGoalCreatedTime(record);
+    if (!ms) return { time: '', date: '' };
+    const d = new Date(ms);
+    if (Number.isNaN(d.getTime())) return { time: '', date: '' };
+
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    const time = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const date = `${day}/${month}/${year}`;
+
+    return { time, date };
+}
+
+function updateSortCreatedButton() {
+    const btn = document.getElementById('sortCreatedBtn');
+    if (!btn) return;
+    const icon = btn.querySelector('i');
+    const isDesc = workspaceSortDir === 'desc';
+    if (icon) {
+        icon.className = isDesc ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short';
+    }
+    btn.title = isDesc ? 'Newest first' : 'Oldest first';
+}
+
+window.toggleCreatedSort = function () {
+    workspaceSortDir = workspaceSortDir === 'desc' ? 'asc' : 'desc';
+    updateSortCreatedButton();
+    currentWorkspacePage = 1;
+    renderWorkspace(false);
+};
+
+function getSelectedHorizon() {
+    return document.getElementById('goalHorizonSelect')?.value || 'annual';
+}
+
+function applyHorizonLabels(type) {
+    const itemsLabel = document.getElementById('itemsLabel');
+    if (!itemsLabel) return;
+    if (type === 'annual') itemsLabel.innerText = 'Yearly Commitments';
+    else if (type === 'quarterly') itemsLabel.innerText = 'Quarterly Commitments';
+    else if (type === 'monthly') itemsLabel.innerText = 'Monthly Commitments';
+    else if (type === 'weekly') itemsLabel.innerText = 'Weekly Commitments';
+    else itemsLabel.innerText = 'Daily Commitments';
+}
+
+function computePeriodId(type, now = new Date()) {
+    if (type === 'annual') return `${now.getFullYear()}`;
+    if (type === 'quarterly') {
+        const quarter = Math.floor(now.getMonth() / 3) + 1;
+        return `${now.getFullYear()}-Q${quarter}`;
+    }
+    if (type === 'monthly') {
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        return `${now.getFullYear()}-M${month}`;
+    }
+    if (type === 'weekly') return getWeekIdentifier(now);
+    if (type === 'daily') return now.toISOString().split('T')[0];
+    return '';
+}
+
+window.handleHorizonChange = function () {
+    const type = getSelectedHorizon();
+    currentTab = type;
+    applyHorizonLabels(type);
+};
+
+window.handleTimeframeFilterChange = function () {
+    currentWorkspacePage = 1;
+    renderWorkspace(false);
+};
+
+window.switchWorkspaceTab = function (tabName) {
+    const timeframeSelect = document.getElementById('timeframeFilterDropdown');
+    if (timeframeSelect && ['annual', 'quarterly', 'monthly', 'weekly', 'daily'].includes(tabName)) {
+        timeframeSelect.value = tabName;
+        refreshWorkspaceSelect(timeframeSelect);
     }
 };
 
@@ -264,43 +501,19 @@ window.switchWorkspaceTab = function (tabName) {
 window.handleOpenUnifiedModal = function () {
     activeEditingGoalId = null;
     
-    document.getElementById('goalTitle').value = '';
     document.getElementById('goalItemInput').innerHTML = ''; // cleared contenteditable
     document.getElementById('modalItemsList').innerHTML = '';
     hideAppDropdown();
 
-    const personalRadio = document.querySelector('input[name="goalScope"][value="personal"]');
-    if (personalRadio) personalRadio.checked = true;
-
-    const titleFieldContainer = document.getElementById('titleFieldContainer');
-    const titleFieldLabel = document.getElementById('titleFieldLabel');
-    const itemsLabel = document.getElementById('itemsLabel');
-    const headerTitle = document.getElementById('unifiedModalTitle');
-
-    const typeLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
-    headerTitle.innerText = `Set ${typeLabel} Goal`;
-
-    // Toggle specific fields dynamically based on the current active tab
-    if (['annual', 'quarterly', 'monthly'].includes(currentTab)) {
-        titleFieldContainer.style.display = 'block';
-        if (currentTab === 'annual') {
-            titleFieldLabel.innerText = 'Annual Objective / Theme';
-            itemsLabel.innerText = 'Yearly Commitments';
-        } else if (currentTab === 'quarterly') {
-            titleFieldLabel.innerText = 'Quarterly Focus Area';
-            itemsLabel.innerText = 'Quarterly Commitments';
-        } else {
-            titleFieldLabel.innerText = 'Monthly Theme';
-            itemsLabel.innerText = 'Monthly Commitments';
-        }
-    } else {
-        titleFieldContainer.style.display = 'none';
-        if (currentTab === 'weekly') {
-            itemsLabel.innerText = 'Weekly Commitments';
-        } else {
-            itemsLabel.innerText = 'Daily Commitments';
-        }
+    const timeframe = getSelectedTimeframe();
+    currentTab = timeframe === 'all' ? 'annual' : timeframe;
+    const horizonSelect = document.getElementById('goalHorizonSelect');
+    if (horizonSelect) {
+        horizonSelect.value = currentTab;
+        horizonSelect.disabled = false;
+        refreshWorkspaceSelect(horizonSelect);
     }
+    applyHorizonLabels(currentTab);
 
     openUnifiedModal();
 };
@@ -309,12 +522,13 @@ window.handleOpenUnifiedModal = function () {
 window.saveUnifiedGoal = async function () {
     const actor = window.getSessionActor ? window.getSessionActor() : { name: '', email: '' };
     const user = actor.name || 'Anonymous';
-    const title = document.getElementById('goalTitle').value.trim();
+    const userEmail = (actor.email || '').trim().toLowerCase();
     const itemsArray = getGoalsFromList('modalItemsList');
-    
-    // Capture scope selection
-    const scopeElement = document.querySelector('input[name="goalScope"]:checked');
-    const scope = scopeElement ? scopeElement.value : 'personal';
+    const horizon = getSelectedHorizon();
+    currentTab = horizon;
+
+    // Members can only create personal goals (Personal/Global is admin-only)
+    const scope = 'personal';
 
     if (!user) {
         await showAlert('Authentication Error', 'Your user session name could not be identified.');
@@ -343,16 +557,10 @@ window.saveUnifiedGoal = async function () {
         let type = record.type;
         if (!type) {
             type = record.weekId ? 'weekly' : 'annual';
-        }
-        if (type === 'annual' && !title) {
-            await showAlert('Validation Error', 'Please enter your Annual Objective/Theme.');
-            return;
-        } else if (type === 'quarterly' && !title) {
-            await showAlert('Validation Error', 'Please enter your Quarterly Focus Area.');
-            return;
-        } else if (type === 'monthly' && !title) {
-            await showAlert('Validation Error', 'Please enter your Monthly Theme.');
-            return;
+        } else if (type === 'short-term') {
+            type = 'weekly';
+        } else if (type === 'long-term') {
+            type = 'annual';
         }
 
         const originalGoals = record.goals || [];
@@ -364,16 +572,24 @@ window.saveUnifiedGoal = async function () {
             };
         });
 
-        record.title = title || '';
         record.goals = updatedGoals;
-        record.scope = scope;
+        // Keep existing scope on edit; members cannot change Personal/Global
+        if (!record.scope) record.scope = 'personal';
+        if (userEmail) record.email = userEmail;
+        if (horizon !== type) {
+            const periodId = computePeriodId(horizon);
+            record.type = horizon;
+            record.periodId = periodId;
+            record.weekId = horizon === 'weekly' ? periodId : null;
+        }
+        delete record.title;
 
         await saveWorkspaceGoals(currentDB);
 
         window.notifyTeam && window.notifyTeam({
             action: 'updated',
             actorName: actor.name,
-            itemName: `${type} goals (${record.periodId})`,
+            itemName: `${record.type} goals (${record.periodId})`,
             module: 'Goals',
             excludeEmail: actor.email
         });
@@ -383,44 +599,18 @@ window.saveUnifiedGoal = async function () {
         return;
     }
 
-    // Programmatically calculate period identifiers based on active tab and today's date
-    let periodId = '';
-    const now = new Date();
+    const periodId = computePeriodId(horizon);
 
-    if (currentTab === 'annual') {
-        periodId = `${now.getFullYear()}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Annual Objective/Theme.');
-            return;
-        }
-    } else if (currentTab === 'quarterly') {
-        const quarter = Math.floor(now.getMonth() / 3) + 1;
-        periodId = `${now.getFullYear()}-Q${quarter}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Quarterly Focus Area.');
-            return;
-        }
-    } else if (currentTab === 'monthly') {
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        periodId = `${now.getFullYear()}-M${month}`;
-        if (!title) {
-            await showAlert('Validation Error', 'Please enter your Monthly Theme.');
-            return;
-        }
-    } else if (currentTab === 'weekly') {
-        periodId = getWeekIdentifier(now);
-    } else if (currentTab === 'daily') {
-        periodId = now.toISOString().split('T')[0];
-    }
-
+    const now = Date.now();
     const record = {
-        id: Date.now(),
+        id: now,
+        createdAt: new Date(now).toISOString(),
         user,
-        title: title || '',
+        email: userEmail,
         goals: itemsArray.map(item => ({ text: item, done: false })),
-        weekId: currentTab === 'weekly' ? periodId : null, // keep backward compatibility
+        weekId: horizon === 'weekly' ? periodId : null,
         periodId: periodId,
-        type: currentTab,
+        type: horizon,
         scope: scope
     };
 
@@ -431,7 +621,7 @@ window.saveUnifiedGoal = async function () {
     window.notifyTeam && window.notifyTeam({
         action: 'added',
         actorName: actor.name,
-        itemName: `${currentTab} goals (${periodId})`,
+        itemName: `${horizon} goals (${periodId})`,
         module: 'Goals',
         excludeEmail: actor.email
     });
@@ -442,21 +632,13 @@ window.saveUnifiedGoal = async function () {
 
 window.editCurrentGoal = async function (recordId) {
     activeEditingGoalId = recordId;
-    closeDetailsModal();
 
     const data = await getWorkspaceGoals();
     const record = data.find(r => r.id === recordId);
     if (!record) return;
 
-    document.getElementById('goalTitle').value = record.title || '';
     document.getElementById('goalItemInput').innerHTML = '';
     hideAppDropdown();
-
-    const scopeVal = record.scope || 'personal';
-    const radioBtn = document.querySelector(`input[name="goalScope"][value="${scopeVal}"]`);
-    if (radioBtn) {
-        radioBtn.checked = true;
-    }
 
     const list = document.getElementById('modalItemsList');
     list.innerHTML = '';
@@ -464,11 +646,6 @@ window.editCurrentGoal = async function (recordId) {
         const li = createGoalListItem(g.text);
         list.appendChild(li);
     });
-
-    const titleFieldContainer = document.getElementById('titleFieldContainer');
-    const titleFieldLabel = document.getElementById('titleFieldLabel');
-    const itemsLabel = document.getElementById('itemsLabel');
-    const headerTitle = document.getElementById('unifiedModalTitle');
 
     let type = record.type;
     if (!type) {
@@ -479,29 +656,14 @@ window.editCurrentGoal = async function (recordId) {
         type = 'annual';
     }
 
-    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
-    headerTitle.innerText = `Edit ${capitalizedType} Goal`;
-
-    if (['annual', 'quarterly', 'monthly'].includes(type)) {
-        titleFieldContainer.style.display = 'block';
-        if (type === 'annual') {
-            titleFieldLabel.innerText = 'Annual Objective / Theme';
-            itemsLabel.innerText = 'Yearly Commitments';
-        } else if (type === 'quarterly') {
-            titleFieldLabel.innerText = 'Quarterly Focus Area';
-            itemsLabel.innerText = 'Quarterly Commitments';
-        } else {
-            titleFieldLabel.innerText = 'Monthly Theme';
-            itemsLabel.innerText = 'Monthly Commitments';
-        }
-    } else {
-        titleFieldContainer.style.display = 'none';
-        if (type === 'weekly') {
-            itemsLabel.innerText = 'Weekly Commitments';
-        } else {
-            itemsLabel.innerText = 'Daily Commitments';
-        }
+    currentTab = type;
+    const horizonSelect = document.getElementById('goalHorizonSelect');
+    if (horizonSelect) {
+        horizonSelect.value = type;
+        horizonSelect.disabled = false;
+        refreshWorkspaceSelect(horizonSelect);
     }
+    applyHorizonLabels(type);
 
     openUnifiedModal();
 };
@@ -603,127 +765,179 @@ function getGoalsFromList(listId) {
     return goals.filter(g => g.length > 0);
 }
 
+function resolveGoalType(record) {
+    let type = record.type;
+    if (!type) {
+        type = record.weekId ? 'weekly' : 'annual';
+    } else if (type === 'short-term') {
+        type = 'weekly';
+    } else if (type === 'long-term') {
+        type = 'annual';
+    }
+    return type;
+}
+
 // Global Main Rendering System
 async function renderWorkspace(forceRefresh = false) {
     const loader = document.getElementById('workspaceLoader');
     const content = document.getElementById('workspaceContent');
-    if (loader && content) {
-        loader.style.display = 'flex';
+    const paginationEl = document.getElementById('workspacePagination');
+    const isInitialLoad = content && content.style.display === 'none';
+    if (loader && content && (forceRefresh || isInitialLoad)) {
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {
-    const grids = {
-        annual: document.getElementById('annualGrid'),
-        quarterly: document.getElementById('quarterlyGrid'),
-        monthly: document.getElementById('monthlyGrid'),
-        weekly: document.getElementById('weeklyGrid'),
-        daily: document.getElementById('dailyGrid')
-    };
-
-    if (!grids.annual || !grids.quarterly || !grids.monthly || !grids.weekly || !grids.daily) return;
-
-
+    const listEl = document.getElementById('goalsList');
+    if (!listEl) return;
 
     const data = await getWorkspaceGoals(forceRefresh);
+    if (forceRefresh) {
+        populateMemberFilterDropdown();
+    }
+
     const searchQuery = (document.getElementById('searchWorkspace')?.value || '').toLowerCase().trim();
+    if (searchQuery !== lastWorkspaceSearchQuery) {
+        currentWorkspacePage = 1;
+        lastWorkspaceSearchQuery = searchQuery;
+    }
 
-    // Clear previous elements
-    Object.keys(grids).forEach(key => grids[key].innerHTML = '');
+    const memberFilter = (document.getElementById('memberFilterDropdown')?.value || 'all');
+    const timeframeFilter = getSelectedTimeframe();
 
-    const counts = { annual: 0, quarterly: 0, monthly: 0, weekly: 0, daily: 0 };
-    const sortedData = [...data].sort((a, b) => b.id - a.id);
-    const actor = window.getSessionActor ? window.getSessionActor() : { name: '', email: '' };
+    listEl.innerHTML = '';
+    if (paginationEl) paginationEl.innerHTML = '';
+
+    const sortedData = [...data].sort((a, b) => {
+        const diff = getGoalCreatedTime(a) - getGoalCreatedTime(b);
+        return workspaceSortDir === 'asc' ? diff : -diff;
+    });
+
+    const filteredRows = [];
 
     sortedData.forEach(record => {
-        // Map types and evaluate backward compatibility
-        let type = record.type;
-        if (!type) {
-            if (record.weekId) type = 'weekly';
-            else type = 'annual'; // fallback mapping for legacy long-term cards
-        } else if (type === 'short-term') {
-            type = 'weekly';
-        } else if (type === 'long-term') {
-            type = 'annual';
-        }
-
-        const resolvedPeriod = record.periodId || record.weekId || 'Target';
-
-        // Filters evaluation
-        const userMatch = (record.user && typeof record.user === 'string') ? record.user.toLowerCase().includes(searchQuery) : false;
-        const titleMatch = (record.title && typeof record.title === 'string') ? record.title.toLowerCase().includes(searchQuery) : false;
-        const periodMatch = (resolvedPeriod && typeof resolvedPeriod === 'string') ? resolvedPeriod.toLowerCase().includes(searchQuery) : false;
-        const goalMatch = (record.goals && Array.isArray(record.goals)) ? record.goals.some(g => g && g.text && typeof g.text === 'string' && g.text.toLowerCase().includes(searchQuery)) : false;
-
-        if (searchQuery && !(userMatch || titleMatch || periodMatch || goalMatch)) {
+        const type = resolveGoalType(record);
+        if (timeframeFilter !== 'all' && type !== timeframeFilter) {
             return;
         }
 
-        const completedCount = record.goals.filter(g => g.done).length;
-        const totalCount = record.goals.length || 1;
-        const pct = Math.round((completedCount / totalCount) * 100);
+        const resolvedPeriod = record.periodId || record.weekId || 'Target';
+        const recordEmail = goalEmail(record);
 
-        const recordUser = (record.user && typeof record.user === 'string') ? record.user.toLowerCase() : '';
-        const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-        const isOwner = recordUser !== '' && recordUser === actorName;
-        const editButton = isOwner ? `
-            <button class="secondary-btn" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(251,113,133,0.1); color:#fb7185; margin-bottom:0;" onclick="event.stopPropagation(); editCurrentGoal(${record.id})">
-                <i class="fa-solid fa-pen"></i>
-            </button>
-        ` : '';
-        const deleteButton = isOwner ? `
-            <button class="secondary-btn" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; margin-bottom:0;" onclick="event.stopPropagation(); deleteWorkspaceRecord(${record.id})">
-                <i class="fa-solid fa-trash"></i>
-            </button>
-        ` : '';
+        if (memberFilter !== 'all' && recordEmail !== memberFilter.toLowerCase().trim()) {
+            return;
+        }
 
-        const card = document.createElement('div');
-        card.className = 'card accordion-card';
-        card.style.cursor = 'pointer';
-        card.setAttribute('onclick', `openDetailsViewModal(${record.id})`);
+        const userMatch = recordEmail.includes(searchQuery);
+        const periodMatch = (resolvedPeriod && typeof resolvedPeriod === 'string') ? resolvedPeriod.toLowerCase().includes(searchQuery) : false;
+        const formattedPeriod = formatPeriodLabel(resolvedPeriod, type);
+        const periodLabelMatch = formattedPeriod.toLowerCase().includes(searchQuery);
+        const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+        const typeMatch = typeLabel.toLowerCase().includes(searchQuery);
 
-        // Render card variations based on high-level themes vs simple actions list
-        const showTitle = ['annual', 'quarterly', 'monthly'].includes(type);
-        const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
+        const goals = Array.isArray(record.goals) ? record.goals : [];
+        const matchingGoals = goals.map((g, index) => ({ ...g, index })).filter(g => {
+            if (!searchQuery) return true;
+            if (userMatch || periodMatch || periodLabelMatch || typeMatch) return true;
+            return g && g.text && typeof g.text === 'string' && g.text.toLowerCase().includes(searchQuery);
+        });
 
-        const displayTitle = (record.title && record.title.trim()) ? formatGoalText(record.title) : capitalizedType;
+        if (matchingGoals.length === 0) return;
 
-        const scopeBadge = record.scope === 'global' ? 
-            `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Global</span>` : 
-            (record.assignedByAdmin ? 
-                `<span style="background: rgba(251, 113, 133, 0.15); color: #fb7185; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal (Assigned)</span>` :
-                `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal</span>`);
+        const isOwner = actorOwnsGoal(record);
 
-        card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <h4 style="margin:0; color:white; font-size:0.95rem; font-weight:600;">${displayTitle}</h4>
-                <div style="display:flex; align-items:center; gap:4px;">
+        matchingGoals.forEach((g) => {
+            filteredRows.push({
+                record,
+                goal: g,
+                typeLabel,
+                recordEmail,
+                isOwner
+            });
+        });
+    });
+
+    const totalCount = filteredRows.length;
+    const maxPage = Math.max(1, Math.ceil(totalCount / WORKSPACE_ITEMS_PER_PAGE));
+    if (currentWorkspacePage > maxPage) currentWorkspacePage = maxPage;
+    if (currentWorkspacePage < 1) currentWorkspacePage = 1;
+
+    const startIdx = (currentWorkspacePage - 1) * WORKSPACE_ITEMS_PER_PAGE;
+    const endIdx = startIdx + WORKSPACE_ITEMS_PER_PAGE;
+    const pageRows = filteredRows.slice(startIdx, endIdx);
+
+    if (totalCount === 0) {
+        listEl.innerHTML = `<div class="empty-state"><p>No goals mapped to current workspace filter.</p></div>`;
+    } else {
+        const shownActionRecordIds = new Set();
+
+        pageRows.forEach(({ record, goal: g, typeLabel, recordEmail, isOwner }) => {
+            const showActions = isOwner && !shownActionRecordIds.has(record.id);
+            if (showActions) shownActionRecordIds.add(record.id);
+
+            const editButton = showActions ? `
+                <button class="secondary-btn" title="Edit goal group" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(251,113,133,0.1); color:#fb7185; margin-bottom:0;" onclick="event.stopPropagation(); editCurrentGoal(${record.id})">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+            ` : '';
+            const deleteButton = showActions ? `
+                <button class="secondary-btn" title="Delete goal group" style="padding:2px 6px; font-size:0.7rem; width:auto; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; margin-bottom:0;" onclick="event.stopPropagation(); deleteWorkspaceRecord(${record.id})">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            ` : '';
+
+            const createdStamp = formatGoalCreatedStamp(record);
+            const createdStampHtml = createdStamp.time ? `
+                <div class="goal-created-stamp" title="Created ${createdStamp.time} ${createdStamp.date}">
+                    <span class="goal-created-time">${createdStamp.time}</span>
+                    <span class="goal-created-date">${createdStamp.date}</span>
+                </div>
+            ` : '';
+            const actionsHtml = (editButton || deleteButton) ? `
+                <div class="workspace-goal-actions">
                     ${editButton}
                     ${deleteButton}
                 </div>
-            </div>
-            <p style="font-size:0.75rem; color:#9ca3af; margin:0 0 10px 0; display: flex; align-items: center; gap: 4px;">
-                <span>${record.user} • ${resolvedPeriod}</span>
-                ${scopeBadge}
-            </p>
-            <div class="infographics-bar" style="height:6px;">
-                <div class="infographics-fill" style="width: ${pct}%"></div>
-            </div>
-            <p style="font-size:0.75rem; color:#9ca3af; margin:0;">${completedCount}/${record.goals.length} metrics reached (${pct}%)</p>
-        `;
+            ` : '';
 
-        if (grids[type]) {
-            grids[type].appendChild(card);
-            counts[type]++;
-        }
-    });
+            const row = document.createElement('div');
+            row.className = 'workspace-goal-row' + (showActions ? ' has-visible-actions' : '');
+            row.innerHTML = `
+                <input type="checkbox" class="goal-checkbox" ${g.done ? 'checked' : ''} ${isOwner ? '' : 'disabled'} onchange="toggleSubGoal(${record.id}, ${g.index})">
+                <div class="workspace-goal-body">
+                    <div class="workspace-goal-text" style="text-decoration: ${g.done ? 'line-through' : 'none'}; color: ${g.done ? '#6b7280' : '#d1d5db'}">
+                        ${formatGoalText(g.text)}
+                    </div>
+                    <div class="workspace-goal-footer">
+                        <span class="workspace-goal-footer-meta">${typeLabel} • ${recordEmail || 'Unknown'}</span>
+                    </div>
+                </div>
+                ${actionsHtml}
+                ${createdStampHtml}
+            `;
 
-    // Populate empty layouts
-    Object.keys(grids).forEach(key => {
-        if (counts[key] === 0) {
-            const label = key.charAt(0).toUpperCase() + key.slice(1);
-            grids[key].innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><p>No ${label} goals mapped to current workspace filter.</p></div>`;
+            listEl.appendChild(row);
+        });
+
+        if (paginationEl) {
+            const startRange = startIdx + 1;
+            const endRange = Math.min(endIdx, totalCount);
+            const prevDisabled = currentWorkspacePage === 1;
+            const nextDisabled = endIdx >= totalCount;
+
+            paginationEl.innerHTML = `
+                <span>${startRange}-${endRange} of ${totalCount}</span>
+                <div style="display: flex; gap: 6px;">
+                    <button onclick="changeWorkspacePage(-1)" ${prevDisabled ? 'disabled' : ''} style="width: auto; padding: 4px 8px; font-size: 0.8rem; background: ${prevDisabled ? 'rgba(255,255,255,0.05)' : '#fb7185'}; border: none; color: ${prevDisabled ? '#4b5563' : 'white'}; cursor: ${prevDisabled ? 'not-allowed' : 'pointer'}; border-radius: 4px;">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button onclick="changeWorkspacePage(1)" ${nextDisabled ? 'disabled' : ''} style="width: auto; padding: 4px 8px; font-size: 0.8rem; background: ${nextDisabled ? 'rgba(255,255,255,0.05)' : '#fb7185'}; border: none; color: ${nextDisabled ? '#4b5563' : 'white'}; cursor: ${nextDisabled ? 'not-allowed' : 'pointer'}; border-radius: 4px;">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
         }
-    });
+    }
 
     } finally {
         if (loader && content) {
@@ -738,6 +952,7 @@ window.handleWorkspaceRefresh = async function () {
     const icon = document.querySelector('.header-container .refresh-btn i');
     if (icon) icon.classList.add('fa-spin');
     try {
+        await fetchUsersList();
         await renderWorkspace(true);
     } catch (e) {
         console.error('Refresh issue:', e);
@@ -754,9 +969,7 @@ window.deleteWorkspaceRecord = async function (id) {
     const data = await getWorkspaceGoals(true);
     const item = data.find(r => r.id === id);
 
-    const itemUser = (item && item.user && typeof item.user === 'string') ? item.user.toLowerCase() : '';
-    const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-    if (item && (itemUser === '' || itemUser !== actorName)) {
+    if (item && !actorOwnsGoal(item)) {
         await showAlert("Permission Denied", "You can only remove your own goal cards.");
         return;
     }
@@ -764,9 +977,6 @@ window.deleteWorkspaceRecord = async function (id) {
     if (!confirmed) return;
 
     const filtered = data.filter(r => r.id !== id);
-    if (activeViewingId === id) {
-        closeDetailsModal();
-    }
     await saveWorkspaceGoals(filtered);
 
     window.notifyTeam && window.notifyTeam({
@@ -778,26 +988,28 @@ window.deleteWorkspaceRecord = async function (id) {
     });
 };
 
-// Checkbox interactive triggers
-window.toggleSubGoalInModal = async function (recordId, index) {
+// Checkbox interactive triggers — only the assigned member / creator can complete
+window.toggleSubGoal = async function (recordId, index) {
     const actor = window.getSessionActor ? window.getSessionActor() : { name: '', email: '' };
     const data = await getWorkspaceGoals();
     const item = data.find(r => r.id === recordId);
-    if (item) {
-        const itemUser = (item.user && typeof item.user === 'string') ? item.user.toLowerCase() : '';
-        const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-        if (itemUser === '' || itemUser !== actorName) {
-            await showAlert("Permission Denied", "You can only complete your own goals.");
-            await renderWorkspace();
-            return;
-        }
-        item.goals[index].done = !item.goals[index].done;
-        await saveWorkspaceGoals(data);
-        renderDetailsContent();
+    if (!item) return;
+
+    if (!actorOwnsGoal(item)) {
+        await showAlert("Permission Denied", "You can only complete your own goals.");
+        await renderWorkspace(false);
+        return;
     }
+
+    item.goals[index].done = !item.goals[index].done;
+    const saved = await saveWorkspaceGoals(data, { skipRender: true });
+    if (!saved) {
+        item.goals[index].done = !item.goals[index].done;
+    }
+    await renderWorkspace(false);
 };
 
-// Helper to format period identifiers nicely for the details modal
+// Helper to format period identifiers for list metadata
 function formatPeriodLabel(periodId, type) {
     if (!periodId) return '';
     if (type === 'monthly') {
@@ -839,95 +1051,11 @@ function formatPeriodLabel(periodId, type) {
     return periodId;
 }
 
-// Detailed Modals Control
-window.openDetailsViewModal = function (recordId) {
-    activeViewingId = recordId;
-    const modal = document.getElementById('detailsViewModal');
-    if (!modal) return;
-    modal.style.display = 'flex';
-    modal.offsetHeight;
-    modal.classList.add('show');
-    renderDetailsContent();
-};
-
-async function renderDetailsContent() {
-    if (!activeViewingId) return;
-    const data = await getWorkspaceGoals();
-    const record = data.find(r => r.id === activeViewingId);
-    if (!record) {
-        closeDetailsModal();
-        return;
-    }
-
-    const titleEl = document.getElementById('detailsTitle');
-    const metaEl = document.getElementById('detailsMeta');
-    const listEl = document.getElementById('detailsList');
-
-    const totalCount = record.goals.length || 1;
-    const completedCount = record.goals.filter(g => g.done).length;
-    const pct = Math.round((completedCount / totalCount) * 100);
-
-    let type = record.type;
-    if (!type) {
-        type = record.weekId ? 'weekly' : 'annual';
-    } else if (type === 'short-term') {
-        type = 'weekly';
-    } else if (type === 'long-term') {
-        type = 'annual';
-    }
-
-    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
-    titleEl.innerText = `${capitalizedType} Goal Information`;
-
-    const resolvedPeriod = record.periodId || record.weekId || 'Target';
-    const formattedPeriod = formatPeriodLabel(resolvedPeriod, type);
-
-    const scopeBadge = record.scope === 'global' ? 
-        `<span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Global</span>` : 
-        (record.assignedByAdmin ? 
-            `<span style="background: rgba(251, 113, 133, 0.15); color: #fb7185; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal (Assigned)</span>` :
-            `<span style="background: rgba(156, 163, 175, 0.15); color: #cbd5e1; padding: 1px 4px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; margin-left: 6px;">Personal</span>`);
-
-    metaEl.innerHTML = `
-        <div style="margin-bottom: 10px;">
-            <p style="margin: 0 0 6px 0; font-size: 0.95rem; color: white; display: flex; align-items: center; gap: 4px;">
-                <strong>${record.user}</strong> - <span style="color: #fb7185;">${formattedPeriod}</span>
-                ${scopeBadge}
-            </p>
-            ${record.title ? `<p style="margin: 4px 0 0 0; font-size: 0.9rem; color: #cbd5e1; font-weight: 500;">${formatGoalText(record.title)}</p>` : ''}
-        </div>
-        <div class="infographics-bar" style="height: 6px; margin: 8px 0;">
-            <div class="infographics-fill" style="width: ${pct}%"></div>
-        </div>
-    `;
-
-    const actor = window.getSessionActor ? window.getSessionActor() : { name: '', email: '' };
-    const recordUser = (record.user && typeof record.user === 'string') ? record.user.toLowerCase() : '';
-    const actorName = (actor.name && typeof actor.name === 'string') ? actor.name.toLowerCase() : '';
-    const isOwner = recordUser !== '' && recordUser === actorName;
-
-    listEl.innerHTML = record.goals.map((g, index) => `
-        <div class="goal-item-row">
-            <input type="checkbox" class="goal-checkbox" ${g.done ? 'checked' : ''} ${isOwner ? '' : 'disabled'} onchange="toggleSubGoalInModal(${record.id}, ${index})">
-            <span style="font-size:0.85rem; text-decoration: ${g.done ? 'line-through' : 'none'}; color: ${g.done ? '#6b7280' : '#d1d5db'}">
-                ${formatGoalText(g.text)}
-            </span>
-        </div>
-    `).join('');
-
-    const actionsEl = document.getElementById('detailsActions');
-    if (actionsEl) {
-        actionsEl.innerHTML = '';
-        actionsEl.style.display = 'none';
-    }
-}
-
 // Modal View Toggles
 window.openUnifiedModal = function () {
     const modal = document.getElementById('unifiedGoalModal');
     const headerTitle = document.getElementById('unifiedModalTitle');
-    const typeLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
-    headerTitle.innerText = `Set ${typeLabel} Goal`;
+    headerTitle.innerText = activeEditingGoalId ? 'Edit Goal' : 'New Goal';
 
     modal.style.display = 'flex';
     modal.offsetHeight;
@@ -940,15 +1068,6 @@ window.closeUnifiedModal = function () {
     setTimeout(() => {
         modal.style.display = 'none';
         hideAppDropdown();
-    }, 300);
-};
-
-window.closeDetailsModal = function () {
-    const modal = document.getElementById('detailsViewModal');
-    modal.classList.remove('show');
-    setTimeout(() => {
-        modal.style.display = 'none';
-        activeViewingId = null;
     }, 300);
 };
 
@@ -973,10 +1092,8 @@ window.closeValidationInfoModal = function () {
 // Backdrop Click handlers
 window.onclick = function (e) {
     const unifiedModal = document.getElementById('unifiedGoalModal');
-    const detailsModal = document.getElementById('detailsViewModal');
     const validationModal = document.getElementById('validationInfoModal');
     if (e.target === unifiedModal) closeUnifiedModal();
-    if (e.target === detailsModal) closeDetailsModal();
     if (e.target === validationModal) closeValidationInfoModal();
 };
 
@@ -1164,14 +1281,16 @@ function initAppTagEventListeners() {
 async function waitForFirebaseAndInitialize() {
     if (window.FirebaseDB) {
         await fetchDigitalSuiteApps(); // populate digital suite details
+        await fetchUsersList();
         initAppTagEventListeners();
+        initWorkspaceSelects();
         
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
         if (tabParam && ['annual', 'quarterly', 'monthly', 'weekly', 'daily'].includes(tabParam)) {
             switchWorkspaceTab(tabParam);
         } else {
-            switchWorkspaceTab('annual'); // default
+            currentTab = 'annual';
         }
         
         renderWorkspace(true);

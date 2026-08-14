@@ -43,7 +43,7 @@ async function loadAppDetail() {
     const loader = document.getElementById('detailLoader');
     const content = document.getElementById('detailContent');
     if (loader && content) {
-        loader.style.display = 'flex';
+        loader.style.display = '';
         content.style.display = 'none';
     }
     try {

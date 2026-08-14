@@ -160,7 +160,7 @@
         <!-- Search Bar & Actions -->
         <div class="header-actions" style="margin-bottom: 24px; display: flex; gap: 16px; align-items: center">
             <div class="search-input-wrapper" style="flex: 1">
-                <input type="text" id="searchSkills" placeholder="Search..." oninput="render()">
+                <input type="text" id="searchSkills" placeholder="Enter keyword..." oninput="render()">
             </div>
             <!-- Leaderboard Trigger Button -->
             <button onclick="openSkillsLeaderboardModal()"
@@ -175,8 +175,49 @@
         </div>
 
         <!-- Loader Section -->
-        <div id="skillsLoader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; width: 100%">
-            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--accent, #fbbf24)"></i>
+        <div id="skillsLoader" class="module-skeleton-grid" aria-busy="true" aria-label="Loading skills">
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
+            <div class="skel-compact-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w65"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-compact-meta"><span class="skel-line sm w40"></span></div>
+            </div>
         </div>
 
         <!-- Content Section (Initially Hidden) -->

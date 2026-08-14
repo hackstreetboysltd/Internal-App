@@ -38,7 +38,7 @@
         <div class="header-actions" style="margin-bottom: 24px">
             <div class="search-input-wrapper">
                 
-                <input type="text" id="searchApps" placeholder="Search..."
+                <input type="text" id="searchApps" placeholder="Enter keyword..."
                     oninput="renderApps()">
             </div>
             <button onclick="openModal()" style="width: auto; padding: 10px 18px; font-size: 0.9rem">
@@ -46,8 +46,73 @@
             </button>
         </div>
         <!-- Loader Section -->
-        <div id="appsLoader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; width: 100%">
-            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--accent, #6366f1)"></i>
+        <div id="appsLoader" class="apps-skeleton" aria-busy="true" aria-label="Loading apps">
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
+            <div class="skel-app-card">
+                <div class="skel-compact-top">
+                    <span class="skel-line w50"></span>
+                    <div class="skel-btn-pair"><span class="skel-btn"></span><span class="skel-btn"></span></div>
+                </div>
+                <div class="skel-app-desc">
+                    <span class="skel-line w100"></span>
+                    <span class="skel-line w90"></span>
+                    <span class="skel-line w70"></span>
+                </div>
+            </div>
         </div>
 
         <!-- Content Section (Initially Hidden) -->
