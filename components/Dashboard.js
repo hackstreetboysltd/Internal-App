@@ -23,9 +23,38 @@ const CARDS = [
     { key: "procedures", id: "statProcedures", title: "Procedures", iconWrap: "procedures-color", icon: "fa-solid fa-list-check" },
 ];
 
+async function statForCard(card, isAdminView) {
+    const opts = { admin: false };
+    try {
+        if (card.key === "messages" && isAdminView) {
+            const raData = await get("role_access", opts);
+            const allowedRec = Array.isArray(raData) ? raData.find((r) => r.id === "allowed") : null;
+            return allowedRec ? (allowedRec.emails || []).length : 0;
+        }
+        if (card.key === "calendar") {
+            const [data, meetingData] = await Promise.all([
+                get(card.key, opts),
+                get("meetings", opts),
+            ]);
+            const calCount = Array.isArray(data) ? data.length : 0;
+            const meetingCount = Array.isArray(meetingData) ? meetingData.length : 0;
+            return calCount + meetingCount;
+        }
+        if (card.key === "goals") {
+            const data = await get(card.key, opts);
+            return new Set((data || []).map((item) => item.user)).size;
+        }
+        const data = await get(card.key, opts);
+        return Array.isArray(data) ? data.length : 0;
+    } catch (err) {
+        console.warn(`Failed fetching dashboard stats for ${card.key}:`, err);
+        return 0;
+    }
+}
+
 export default function Dashboard() {
     const router = useRouter();
-    const { isAdminView } = useSession();
+    const { isAdminView, ready, session } = useSession();
     const [greeting, setGreeting] = useState("Welcome Back, Team");
     const [stats, setStats] = useState({});
 
@@ -35,47 +64,16 @@ export default function Dashboard() {
     }, []);
 
     useEffect(() => {
+        if (!ready || !session) return;
         let cancelled = false;
         (async () => {
-            const next = {};
-            for (const card of CARDS) {
-                try {
-                    const data = await get(card.key);
-                    if (card.key === "goals") {
-                        next[card.key] = new Set((data || []).map((item) => item.user)).size;
-                    } else if (card.key === "messages") {
-                        if (isAdminView) {
-                            try {
-                                const raData = await get("role_access", { admin: false });
-                                const allowedRec = Array.isArray(raData) ? raData.find((r) => r.id === "allowed") : null;
-                                next[card.key] = allowedRec ? (allowedRec.emails || []).length : 0;
-                            } catch {
-                                next[card.key] = 0;
-                            }
-                        } else {
-                            next[card.key] = Array.isArray(data) ? data.length : 0;
-                        }
-                    } else if (card.key === "calendar") {
-                        let meetingCount = 0;
-                        try {
-                            const meetingData = await get("meetings");
-                            meetingCount = Array.isArray(meetingData) ? meetingData.length : 0;
-                        } catch {
-                            meetingCount = 0;
-                        }
-                        next[card.key] = (Array.isArray(data) ? data.length : 0) + meetingCount;
-                    } else {
-                        next[card.key] = Array.isArray(data) ? data.length : 0;
-                    }
-                } catch (err) {
-                    console.warn(`Failed fetching dashboard stats for ${card.key}:`, err);
-                    next[card.key] = 0;
-                }
-            }
-            if (!cancelled) setStats(next);
+            const entries = await Promise.all(
+                CARDS.map(async (card) => [card.key, await statForCard(card, isAdminView)]),
+            );
+            if (!cancelled) setStats(Object.fromEntries(entries));
         })();
         return () => { cancelled = true; };
-    }, [isAdminView]);
+    }, [isAdminView, ready, session]);
 
     const open = (key) => {
         const name = displayNameForModule(key, isAdminView);
