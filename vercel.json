@@ -1,4 +1,11 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/Internal-App/",
+      "permanent": false
+    }
+  ],
   "crons": [
     {
       "path": "/Internal-App/api/admin/jobs/retention/",

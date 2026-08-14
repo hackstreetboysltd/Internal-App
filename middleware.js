@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionCookieName } from "@/lib/server/constants";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/Internal-App";
+
 const PUBLIC_PREFIXES = [
   "/login",
   "/github-connect",
@@ -9,6 +11,11 @@ const PUBLIC_PREFIXES = [
   "/api/auth/callback",
   "/api/health",
 ];
+
+function withBasePath(path) {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${BASE_PATH}${normalized}`;
+}
 
 function isPublicPath(pathname) {
   if (pathname.startsWith("/_next")) return true;
@@ -25,7 +32,7 @@ export function middleware(request) {
 
   if (isPublicPath(pathname)) {
     if (sid && (pathname === "/login" || pathname === "/login/")) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL(withBasePath("/"), request.url));
     }
     return NextResponse.next();
   }
@@ -36,7 +43,7 @@ export function middleware(request) {
   }
 
   if (!sid) {
-    const loginUrl = new URL("/login/", request.url);
+    const loginUrl = new URL(withBasePath("/login/"), request.url);
     loginUrl.searchParams.set("returnTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
