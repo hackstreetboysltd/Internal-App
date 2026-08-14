@@ -1,0 +1,41 @@
+{
+  "name": "internal-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f",
+    "migrate": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down",
+    "migrate:create": "node-pg-migrate create",
+    "migrate:firestore": "node scripts/migrate-firestore-to-pg.mjs",
+    "jobs:retention": "node scripts/retention.mjs",
+    "test:load": "node scripts/load-test.mjs",
+    "test:phase2": "node scripts/test-phase2.mjs",
+    "test:phase3": "node scripts/test-phase3.mjs",
+    "test:phase4": "node scripts/test-phase4.mjs",
+    "test:phase5": "node scripts/test-phase5.mjs",
+    "test:phase6": "node scripts/test-phase6.mjs",
+    "test:phase7": "node scripts/test-phase7.mjs",
+    "test:phase8": "node scripts/test-phase8.mjs"
+  },
+  "dependencies": {
+    "firebase": "^10.12.2",
+    "ioredis": "^5.6.1",
+    "next": "16.3.1",
+    "pg": "^8.16.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "16.3.1",
+    "firebase-admin": "^13.0.2",
+    "node-pg-migrate": "^7.9.1"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/Internal-App/api/admin/jobs/retention/",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}
