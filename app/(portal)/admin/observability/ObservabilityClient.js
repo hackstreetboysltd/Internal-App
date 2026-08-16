@@ -1,21 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useGlobalDialog } from "@/components/GlobalDialog";
+import { emailIsListedAdmin, sessionHasAdminRole } from "@/lib/adminAccess";
 import { apiPath } from "@/lib/apiPath";
+import { get } from "@/lib/portalApi";
+import { formatPortalTime, useServerClock } from "@/lib/portalTime";
 import { useSession } from "@/lib/session";
 import "./observability.css";
 
 const MAX_ROWS = 1000;
 const HISTORY_PAGE = 50;
-
-function formatTime(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3 });
-}
 
 function statusClass(status) {
   if (status === 429) return "status-429";
@@ -38,6 +33,35 @@ function matchesApiFilters(row, filters) {
   return true;
 }
 
+function computeLiveStats(rows, now) {
+  const inWindow = (ms) => rows.filter((row) => {
+    const t = new Date(row.timestamp).getTime();
+    return Number.isFinite(t) && now - t >= 0 && now - t <= ms;
+  });
+  const oneMin = inWindow(60000);
+  const fiveMin = inWindow(5 * 60000);
+  const hour = inWindow(60 * 60000);
+  const errors = fiveMin.filter((row) => Number(row.status) >= 400);
+  const rateLimited = fiveMin.filter((row) => row.rateLimited);
+  const pathCounts = new Map();
+  for (const row of hour) {
+    const path = String(row.path || "");
+    pathCounts.set(path, (pathCounts.get(path) || 0) + 1);
+  }
+  const topPaths = [...pathCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([path, count]) => ({ path, count }));
+
+  return {
+    rps: Math.round((oneMin.length / 60) * 100) / 100,
+    totalRequests: fiveMin.length,
+    errorRate: fiveMin.length > 0 ? Math.round((errors.length / fiveMin.length) * 1000) / 10 : 0,
+    rateLimitedCount: rateLimited.length,
+    topPaths: topPaths,
+  };
+}
+
 function defaultFilters() {
   return {
     method: "",
@@ -58,17 +82,19 @@ async function fetchJson(path) {
 }
 
 export default function ObservabilityClient() {
-  const router = useRouter();
-  const { session, ready } = useSession();
+  const { session, ready, refreshSession } = useSession();
   const { showGlobalDialog } = useGlobalDialog();
-  const isAdmin = (session?.roles || []).includes("admin");
+  const roleAdmin = sessionHasAdminRole(session);
+  const [listedAdmin, setListedAdmin] = useState(false);
+  const [gateReady, setGateReady] = useState(roleAdmin);
+  const isAdmin = roleAdmin || listedAdmin;
 
   const [paused, setPaused] = useState(false);
   const [feedMode, setFeedMode] = useState("live");
   const [filters, setFilters] = useState(defaultFilters);
   const [apiRows, setApiRows] = useState([]);
   const [activityRows, setActivityRows] = useState([]);
-  const [stats, setStats] = useState(null);
+  const { nowMs, source: clockSource, timeZone } = useServerClock();
   const [selected, setSelected] = useState(null);
   const [trace, setTrace] = useState({ requests: [], activity: [] });
   const [traceLoading, setTraceLoading] = useState(false);
@@ -84,6 +110,8 @@ export default function ObservabilityClient() {
     filtersRef.current = filters;
   }, [paused, filters]);
 
+  const stats = useMemo(() => computeLiveStats(apiRows, nowMs), [apiRows, nowMs]);
+
   const prependCap = useCallback((setter, row, keyFn) => {
     setter((prev) => {
       const key = keyFn(row);
@@ -93,29 +121,44 @@ export default function ObservabilityClient() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    if (!session) return;
-    if (!isAdmin) {
-      router.replace("/");
+    if (!ready) return undefined;
+    if (roleAdmin) {
+      setListedAdmin(false);
+      setGateReady(true);
+      return undefined;
     }
-  }, [ready, session, isAdmin, router]);
+    if (!session?.email) {
+      setListedAdmin(false);
+      setGateReady(true);
+      return undefined;
+    }
 
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const loadStats = async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const data = await fetchJson("/api/admin/stats");
-        setStats(data);
-      } catch (err) {
-        console.warn("Stats load failed:", err);
+        const next = await refreshSession();
+        if (cancelled) return;
+        if (sessionHasAdminRole(next)) {
+          setListedAdmin(false);
+          setGateReady(true);
+          return;
+        }
+        const data = await get("role_access", { admin: false });
+        const adminsRecord = Array.isArray(data) ? data.find((row) => row.id === "admins") : null;
+        const listed = emailIsListedAdmin(session.email, adminsRecord?.emails);
+        if (!cancelled) {
+          setListedAdmin(listed);
+          setGateReady(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setListedAdmin(false);
+          setGateReady(true);
+        }
       }
-    };
-
-    loadStats();
-    const id = setInterval(loadStats, 15000);
-    return () => clearInterval(id);
-  }, [isAdmin]);
+    })();
+    return () => { cancelled = true; };
+  }, [ready, roleAdmin, refreshSession, session?.email]);
 
   useEffect(() => {
     if (!isAdmin || paused || feedMode !== "live") return;
@@ -276,7 +319,7 @@ export default function ObservabilityClient() {
     return items.sort((a, b) => new Date(b.sortTs) - new Date(a.sortTs));
   }, [trace]);
 
-  if (!ready) {
+  if (!ready || !gateReady) {
     return <div className="obs-empty">Loading…</div>;
   }
 
@@ -293,7 +336,13 @@ export default function ObservabilityClient() {
     <div className="observability-module">
       <div className="obs-header">
         <h2><i className="fa-solid fa-chart-line"></i> Observability</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="obs-clock" title={`Source: ${clockSource}`}>
+            <span className="obs-clock-time" suppressHydrationWarning>
+              {nowMs ? formatPortalTime(nowMs, { withMs: false }) : "\u00a0"}
+            </span>
+            <span className="obs-clock-tz">{timeZone.replace("_", " ")}</span>
+          </div>
           <button
             type="button"
             className={`obs-btn${feedMode === "live" ? " active" : ""}`}
@@ -323,8 +372,6 @@ export default function ObservabilityClient() {
         </div>
       </div>
 
-      {stats ? (
-        <>
           <div className="obs-stats">
             <div className="obs-stat-card">
               <div className="label">RPS (1m)</div>
@@ -343,22 +390,9 @@ export default function ObservabilityClient() {
               <div className="value">{stats.rateLimitedCount}</div>
             </div>
           </div>
-          {stats.hourly?.length ? (
+          {stats.topPaths.length ? (
             <div className="obs-top-paths">
-              <h4>Hourly rollup (24h)</h4>
-              <ul>
-                {stats.hourly.slice(0, 8).map((item) => (
-                  <li key={item.hour}>
-                    <span className="obs-mono">{formatTime(item.hour)}</span>
-                    <span>{item.requestCount} req · {item.errorCount} err · {item.activityCount} act</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {stats.topPaths?.length ? (
-            <div className="obs-top-paths">
-              <h4>Top paths (1h)</h4>
+              <h4>Top paths (1h, live)</h4>
               <ul>
                 {stats.topPaths.map((item) => (
                   <li key={item.path}>
@@ -369,8 +403,6 @@ export default function ObservabilityClient() {
               </ul>
             </div>
           ) : null}
-        </>
-      ) : null}
 
       <div className="obs-toolbar">
         <select
@@ -446,7 +478,7 @@ export default function ObservabilityClient() {
                       className={selected?.kind === "api" && selected.row.requestId === row.requestId ? "selected" : ""}
                       onClick={() => onSelectApiRow(row)}
                     >
-                      <td>{formatTime(row.timestamp)}</td>
+                      <td>{formatPortalTime(row.timestamp)}</td>
                       <td className="obs-truncate">{row.email || "—"}</td>
                       <td className="obs-mono">{row.method}</td>
                       <td className="obs-mono obs-truncate">{row.path}</td>
@@ -485,7 +517,7 @@ export default function ObservabilityClient() {
                       className={selected?.kind === "activity" && selected.row.id === row.id ? "selected" : ""}
                       onClick={() => onSelectActivityRow(row)}
                     >
-                      <td>{formatTime(row.timestamp)}</td>
+                      <td>{formatPortalTime(row.timestamp)}</td>
                       <td className="obs-truncate">{row.email || "—"}</td>
                       <td className="obs-mono">{row.eventType}</td>
                       <td className="obs-truncate">{row.path || "—"}</td>
@@ -516,7 +548,7 @@ export default function ObservabilityClient() {
             <h3>{selected.kind === "api" ? "API request detail" : "Activity detail"}</h3>
             <dl>
               <dt>Time</dt>
-              <dd>{formatTime(selected.row.timestamp)}</dd>
+              <dd>{formatPortalTime(selected.row.timestamp)}</dd>
               <dt>User</dt>
               <dd>{selected.row.email || "—"}</dd>
               <dt>Session</dt>
@@ -571,7 +603,7 @@ export default function ObservabilityClient() {
                   <li key={s.sid}>
                     <div className="obs-mono" style={{ color: "#a5b4fc" }}>{s.sid}</div>
                     <div style={{ color: "#9ca3af", marginTop: 2 }}>
-                      last seen {formatTime(s.lastSeenAt)} · tab {s.sessionId || "—"}
+                      last seen {formatPortalTime(s.lastSeenAt)} · tab {s.sessionId || "—"}
                     </div>
                     <button
                       type="button"
@@ -596,7 +628,7 @@ export default function ObservabilityClient() {
                 {combinedTrace.map((item) => (
                   <li key={`${item.kind}-${item.requestId || item.id || item.sortTs}`}>
                     <div className="obs-mono" style={{ color: "#a5b4fc" }}>
-                      {formatTime(item.sortTs)} · {item.kind === "api" ? `${item.method} ${item.path}` : item.eventType}
+                      {formatPortalTime(item.sortTs)} · {item.kind === "api" ? `${item.method} ${item.path}` : item.eventType}
                     </div>
                     <div style={{ color: "#9ca3af", marginTop: 2 }}>
                       {item.kind === "api" ? `status ${item.status}` : (item.path || "")}

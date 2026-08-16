@@ -7,15 +7,11 @@ import {
   replaceCollectionItems,
 } from "@/lib/server/collectionsDb";
 import { buildRateLimitKey, checkRateLimit } from "@/lib/server/rateLimit";
+import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
 import { withApi } from "@/lib/server/withApi";
 
 export const dynamic = "force-dynamic";
-
-function readAdminView(request) {
-  const url = new URL(request.url);
-  return url.searchParams.get("admin") === "1" || url.searchParams.get("adminView") === "1";
-}
 
 /**
  * @param {{ email?: string } | null | undefined} session
@@ -73,7 +69,7 @@ export const PUT = withApi(async (request, routeContext, { session }) => {
     oldCollection,
     body,
     { name: session.name, email: session.email },
-    { adminView: readAdminView(request), users },
+    { adminView: effectiveAdminView(request, session), users },
   );
 
   if (!auth.ok) {

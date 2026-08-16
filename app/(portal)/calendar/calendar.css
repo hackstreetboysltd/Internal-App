@@ -374,7 +374,7 @@
             height: 32px;
             box-shadow: none;
             font-size: 1.15rem;
-            display: none;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             opacity: 0.75;

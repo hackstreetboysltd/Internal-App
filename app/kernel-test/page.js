@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { get, save } from "@/lib/portalApi";
+import { useSession } from "@/lib/session";
 
 function firstDiff(a, b, path = "$") {
     if (a === b) return null;
@@ -30,6 +31,8 @@ function firstDiff(a, b, path = "$") {
 }
 
 export default function KernelTestPage() {
+    const { session, ready } = useSession();
+    const isAdmin = Array.isArray(session?.roles) && session.roles.includes("admin");
     const [status, setStatus] = useState("Loading Postgres collections…");
     const [profileLen, setProfileLen] = useState(null);
     const [roleLen, setRoleLen] = useState(null);
@@ -102,6 +105,7 @@ export default function KernelTestPage() {
     }, []);
 
     useEffect(() => {
+        if (!ready || !isAdmin) return undefined;
         let cancelled = false;
         (async () => {
             try {
@@ -121,7 +125,28 @@ export default function KernelTestPage() {
         return () => {
             cancelled = true;
         };
-    }, [loadCollections]);
+    }, [loadCollections, ready, isAdmin]);
+
+    if (!ready) {
+        return (
+            <main className="content-viewport">
+                <div className="welcome-screen">
+                    <p className="subtitle">Checking session…</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <main className="content-viewport">
+                <div className="welcome-screen">
+                    <h1>Access denied</h1>
+                    <p className="subtitle">Kernel test is limited to admin sessions.</p>
+                </div>
+            </main>
+        );
+    }
 
     return (
         <>

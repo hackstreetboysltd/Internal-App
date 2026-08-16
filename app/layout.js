@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-page-custom-font */
 import "./globals.css";
+import "./module-scale.css";
 import AppFrame from "@/components/AppFrame";
 
 /* CDN fonts; next/font would change loading behavior. */

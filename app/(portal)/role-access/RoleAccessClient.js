@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { get, save } from "@/lib/portalApi";
+import { get, save, watch } from "@/lib/portalApi";
 import { useSession, clearActiveModule, setAdminView } from "@/lib/session";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -151,16 +151,26 @@ export default function RoleAccessClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(async () => {
-            setLoading(true);
-            try {
-                await loadRoleAccess();
-            } finally {
-                setLoading(false);
+        setLoading(true);
+        const unsub = watch("role_access", (data) => {
+            if (Array.isArray(data)) {
+                const allowedRec = data.find((r) => r.id === "allowed");
+                const adminsRec = data.find((r) => r.id === "admins");
+                setAllowedEmails(allowedRec ? allowedRec.emails || [] : []);
+                setAdminEmails(adminsRec ? adminsRec.emails || [] : []);
             }
-        }, 0);
-        return () => clearTimeout(t);
-    }, [loadRoleAccess]);
+            setLoading(false);
+        }, {
+            admin: false,
+            onError: (err) => {
+                console.warn("Could not load role access, starting fresh.", err);
+                setAllowedEmails([]);
+                setAdminEmails([]);
+                setLoading(false);
+            },
+        });
+        return unsub;
+    }, []);
 
     const persist = async (nextAllowed, nextAdmins) => {
         try {

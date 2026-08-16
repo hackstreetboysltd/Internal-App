@@ -6,7 +6,6 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/Internal-App";
 const PUBLIC_PREFIXES = [
   "/login",
   "/github-connect",
-  "/kernel-test",
   "/api/auth/google",
   "/api/auth/callback",
   "/api/health",
@@ -47,7 +46,8 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
-  // API routes handle auth, rate limits, and logging in route handlers (withApi).
+  // Cookie presence only (Edge cannot talk to Redis via ioredis).
+  // APIs validate the Redis session in withApi; HTML routes re-check via /api/auth/me.
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }

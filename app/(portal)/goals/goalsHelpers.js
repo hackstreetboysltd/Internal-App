@@ -1,3 +1,7 @@
+'use client';
+
+import { formatPortalCreatedStamp, nextPortalId, portalDateParts } from "@/lib/portalTime";
+
 export const HORIZONS = ["annual", "quarterly", "monthly", "weekly", "daily"];
 export const HORIZON_OPTIONS = [
     { value: "all", label: "All time" },
@@ -16,7 +20,7 @@ export const MONTHS = [
 ];
 
 export function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 let draftSeq = 0;
@@ -50,18 +54,19 @@ export function getWeekIdentifier(d) {
     return `${date.getUTCFullYear()}-W${weekNo}`;
 }
 
-export function computePeriodId(type, now = new Date()) {
-    if (type === "annual") return `${now.getFullYear()}`;
+export function computePeriodId(type, now) {
+    const p = now
+        ? { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() }
+        : portalDateParts();
+    const pad = (n) => String(n).padStart(2, "0");
+    if (type === "annual") return `${p.year}`;
     if (type === "quarterly") {
-        const quarter = Math.floor(now.getMonth() / 3) + 1;
-        return `${now.getFullYear()}-Q${quarter}`;
+        const quarter = Math.floor((p.month - 1) / 3) + 1;
+        return `${p.year}-Q${quarter}`;
     }
-    if (type === "monthly") {
-        const month = String(now.getMonth() + 1).padStart(2, "0");
-        return `${now.getFullYear()}-M${month}`;
-    }
-    if (type === "weekly") return getWeekIdentifier(now);
-    if (type === "daily") return now.toISOString().split("T")[0];
+    if (type === "monthly") return `${p.year}-M${pad(p.month)}`;
+    if (type === "weekly") return getWeekIdentifier(new Date(p.year, p.month - 1, p.day));
+    if (type === "daily") return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
     return "";
 }
 
@@ -125,22 +130,7 @@ export function getGoalCreatedTime(record) {
 }
 
 export function formatGoalCreatedStamp(record) {
-    const ms = getGoalCreatedTime(record);
-    if (!ms) return { time: "", date: "" };
-    const d = new Date(ms);
-    if (Number.isNaN(d.getTime())) return { time: "", date: "" };
-
-    let hours = d.getHours();
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    if (hours === 0) hours = 12;
-    const time = `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
-
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    return { time, date: `${day}/${month}/${year}` };
+    return formatPortalCreatedStamp(getGoalCreatedTime(record));
 }
 
 export function escapeHtml(str) {

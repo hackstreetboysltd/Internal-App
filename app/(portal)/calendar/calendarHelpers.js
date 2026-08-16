@@ -1,5 +1,7 @@
+import { nextPortalId, portalNowMs, portalTodayStr, getPortalTimeZone } from "@/lib/portalTime";
+
 export function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 export const MONTH_NAMES = [
@@ -10,8 +12,7 @@ export const MONTH_NAMES = [
 export const MAX_INLINE_FILE_BYTES = 512 * 1024;
 
 export function todayStr() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return portalTodayStr();
 }
 
 export function toDateStr(value) {
@@ -57,7 +58,7 @@ export function matchesSearch(item, query) {
     const timeLabel = item.time ? new Date(item.time).toLocaleString() : "";
     let status = "";
     if (item.time) {
-        const diffMs = new Date(item.time) - new Date();
+        const diffMs = new Date(item.time) - portalNowMs();
         if (diffMs > 0) status = "upcoming";
         else if (Math.abs(diffMs) < 60 * 60 * 1000) status = "in progress";
         else status = "completed";
@@ -113,7 +114,7 @@ export function formatDocMeta(doc) {
     if (!doc.postedAt) return who;
     const d = new Date(doc.postedAt);
     if (Number.isNaN(d.getTime())) return who;
-    return `${who} · ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    return `${who} · ${d.toLocaleDateString(undefined, { timeZone: getPortalTimeZone(), month: "short", day: "numeric" })}`;
 }
 
 export function fileToDataUrl(file) {
@@ -136,7 +137,7 @@ export function downloadDataUrl(dataUrl, filename) {
 
 export function meetingStatus(time) {
     const mDate = new Date(time);
-    const diffMs = mDate - new Date();
+    const diffMs = mDate - portalNowMs();
     let statusBadge = "Completed";
     let badgeClass = "success";
     if (diffMs > 0) {

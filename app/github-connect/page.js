@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FirebaseAuth } from "@/lib/firebase";
 import { getGithubPat, setGithubPat } from "@/lib/portalApi";
+import { githubMessageOrigin } from "@/lib/githubMessage";
 import "./github-connect.css";
 
 export default function GithubConnectPage() {
@@ -14,7 +15,7 @@ export default function GithubConnectPage() {
             const has = !!getGithubPat();
             setConnected(has);
             if (has && window.opener) {
-                window.opener.postMessage({ type: "GITHUB_CONNECTED", token: getGithubPat() }, "*");
+                window.opener.postMessage({ type: "GITHUB_CONNECTED", token: getGithubPat() }, githubMessageOrigin());
             }
         }, 0);
         return () => clearTimeout(t);
@@ -37,7 +38,7 @@ export default function GithubConnectPage() {
                 setStatus({ className: "status-msg success", text: "Successfully connected!" });
                 setTimeout(() => {
                     if (window.opener) {
-                        window.opener.postMessage({ type: "GITHUB_CONNECTED", token }, "*");
+                        window.opener.postMessage({ type: "GITHUB_CONNECTED", token }, githubMessageOrigin());
                         window.close();
                     } else {
                         setConnected(true);
@@ -59,7 +60,7 @@ export default function GithubConnectPage() {
             await FirebaseAuth.signOut(FirebaseAuth.auth);
         }
         if (window.opener) {
-            window.opener.postMessage({ type: "GITHUB_DISCONNECTED" }, "*");
+            window.opener.postMessage({ type: "GITHUB_DISCONNECTED" }, githubMessageOrigin());
         }
         setConnected(false);
     };

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { approve, get, getCollection, reject, save, saveCollection } from "@/lib/portalApi";
+import { approve, get, getCollection, reject, save, saveCollection, watch } from "@/lib/portalApi";
+import { portalDateParts, portalNowIso } from "@/lib/portalTime";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import {
@@ -205,20 +206,41 @@ export default function CalendarClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(async () => {
-            const now = new Date();
-            setCalYear(now.getFullYear());
-            setCalMonth(now.getMonth());
-            setToday(todayStr());
-            setLoading(true);
-            try {
-                await loadSchedule();
-            } finally {
-                setLoading(false);
-            }
-        }, 0);
-        return () => clearTimeout(t);
-    }, [loadSchedule]);
+        const now = portalDateParts();
+        setCalYear(now.year);
+        setCalMonth(now.month - 1);
+        setToday(todayStr());
+        setLoading(true);
+        const seen = new Set();
+        const mark = (key) => {
+            seen.add(key);
+            if (seen.size >= 2) setLoading(false);
+        };
+        const u1 = watch("calendar", (ev) => {
+            setEvents(Array.isArray(ev) ? ev : []);
+            mark("calendar");
+        }, {
+            onError: (e) => {
+                console.error("Failed to load calendar.", e);
+                setEvents([]);
+                mark("calendar");
+            },
+        });
+        const u2 = watch("meetings", (mt) => {
+            setMeetings(Array.isArray(mt) ? mt : []);
+            mark("meetings");
+        }, {
+            onError: (e) => {
+                console.error("Failed to load calendar.", e);
+                setMeetings([]);
+                mark("meetings");
+            },
+        });
+        return () => {
+            u1();
+            u2();
+        };
+    }, []);
 
     const saveEvents = async (list) => {
         try {
@@ -300,9 +322,9 @@ export default function CalendarClient() {
     };
 
     const jumpToToday = () => {
-        const now = new Date();
-        setCalYear(now.getFullYear());
-        setCalMonth(now.getMonth());
+        const now = portalDateParts();
+        setCalYear(now.year);
+        setCalMonth(now.month - 1);
         setToday(todayStr());
         if (dayViewOpen) closeDayView();
     };
@@ -677,7 +699,7 @@ export default function CalendarClient() {
                 url: finalUrl,
                 hasFile: !!file,
                 postedBy: current.name,
-                postedAt: new Date().toISOString(),
+                postedAt: portalNowIso(),
             });
             if (viewingDocs.kind === "meeting") await saveMeetings(listToSave);
             else await saveEvents(listToSave);
@@ -791,16 +813,19 @@ export default function CalendarClient() {
         <div className="calendar-module" onClick={() => { if (addMenuOpen) setAddMenuOpen(false); }}>
             <div className="container">
                 <div className="header-container" style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", alignItems: "center", marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16 }}>
-                    <button
-                        type="button"
-                        className="cal-back-btn"
-                        title="Back to calendar"
-                        style={{ display: dayViewOpen ? "inline-flex" : "none" }}
-                        onClick={closeDayView}
-                    >
-                        <i className="fa-solid fa-arrow-left"></i>
-                    </button>
-                    <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", alignItems: "center", gap: 10 }}>
+                    {dayViewOpen ? (
+                        <button
+                            type="button"
+                            className="cal-back-btn"
+                            title="Back to calendar"
+                            onClick={closeDayView}
+                        >
+                            <i className="fa-solid fa-arrow-left"></i>
+                        </button>
+                    ) : (
+                        <div></div>
+                    )}
+                    <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
                         <span style={dayViewOpen ? { color: "#f472b6", fontSize: "1.35rem" } : undefined}>
                             {dayViewOpen && selectedDateStr ? formatDayTitle(selectedDateStr) : "Calendar"}
                         </span>
@@ -828,17 +853,19 @@ export default function CalendarClient() {
                             <input type="text" placeholder="Search events and meetings..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                     ) : null}
-                    <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
-                        <button
-                            type="button"
-                            onClick={() => setAddMenuOpen((v) => !v)}
-                            style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: "#f472b6", borderColor: "#f472b6", color: "white" }}
-                        >
-                            <i className="fa-solid fa-plus"></i> Add
-                        </button>
-                        <div className={addMenuOpen ? "add-menu show" : "add-menu"}>
-                            <button type="button" onClick={openAddEvent}><i className="fa-regular fa-calendar" style={{ color: "#f472b6" }}></i> Event</button>
-                            <button type="button" onClick={openAddMeeting}><i className="fa-solid fa-video" style={{ color: "#818cf8" }}></i> Meeting</button>
+                    <div className="header-actions-primary" onClick={(e) => e.stopPropagation()}>
+                        <div className="header-actions-menu">
+                            <button
+                                type="button"
+                                onClick={() => setAddMenuOpen((v) => !v)}
+                                style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: "#f472b6", borderColor: "#f472b6", color: "white" }}
+                            >
+                                <i className="fa-solid fa-plus"></i> Add
+                            </button>
+                            <div className={addMenuOpen ? "add-menu show" : "add-menu"}>
+                                <button type="button" onClick={openAddEvent}><i className="fa-regular fa-calendar" style={{ color: "#f472b6" }}></i> Event</button>
+                                <button type="button" onClick={openAddMeeting}><i className="fa-solid fa-video" style={{ color: "#818cf8" }}></i> Meeting</button>
+                            </div>
                         </div>
                     </div>
                 </div>

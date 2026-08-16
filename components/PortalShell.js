@@ -8,11 +8,13 @@ import FirstTimeSetup from "@/components/FirstTimeSetup";
 import ActivityTrackerBridge from "@/components/ActivityTrackerBridge";
 import { DialogProvider } from "@/components/GlobalDialog";
 import { SessionProvider, useSession, setAdminView, clearActiveModule } from "@/lib/session";
-import { get, save, setGithubPat } from "@/lib/portalApi";
-import { setEmailNotificationsPaused } from "@/lib/emailNotify";
+import { get, save, watch, setGithubPat } from "@/lib/portalApi";
+import { pausedFromSettings, setEmailNotificationsPaused } from "@/lib/emailNotify";
 import { moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
 import { saveActiveModule } from "@/lib/session";
 import { trackActivity } from "@/lib/activityTracker";
+import { emailIsListedAdmin, sessionHasAdminRole } from "@/lib/adminAccess";
+import { isTrustedGithubMessage } from "@/lib/githubMessage";
 
 function PortalChrome({ children }) {
     const pathname = usePathname();
@@ -21,12 +23,12 @@ function PortalChrome({ children }) {
     const [adminVisible, setAdminVisible] = useState(false);
     const [paused, setPaused] = useState(false);
 
-    const isDashboard = pathname === "/";
+    const isDockModule = !!moduleKeyFromPath(pathname);
 
     useEffect(() => {
-        document.body.classList.toggle("module-open", !isDashboard);
+        document.body.classList.toggle("module-open", isDockModule);
         return () => document.body.classList.remove("module-open");
-    }, [isDashboard]);
+    }, [isDockModule]);
 
     useEffect(() => {
         let cancelled = false;
@@ -35,11 +37,11 @@ function PortalChrome({ children }) {
                 if (!cancelled) setAdminVisible(false);
                 return;
             }
+            const fromSession = sessionHasAdminRole(session);
             try {
                 const data = await get("role_access", { admin: false });
                 const adminsRecord = Array.isArray(data) ? data.find((r) => r.id === "admins") : null;
-                const adminEmails = (adminsRecord ? adminsRecord.emails || [] : []).map((e) => e.trim().toLowerCase());
-                const isAdminUser = adminEmails.includes(session.email.trim().toLowerCase());
+                const isAdminUser = fromSession || emailIsListedAdmin(session.email, adminsRecord?.emails);
                 if (cancelled) return;
                 setAdminVisible(isAdminUser);
                 if (!isAdminUser && isAdminView) {
@@ -48,40 +50,25 @@ function PortalChrome({ children }) {
                 }
             } catch (e) {
                 console.warn("Failed to check admin visibility:", e);
-                if (!cancelled) setAdminVisible(true);
+                if (!cancelled) setAdminVisible(fromSession);
             }
         })();
         return () => { cancelled = true; };
     }, [isAdminView, router, session]);
 
     useEffect(() => {
-        let cancelled = false;
-        const sync = async () => {
-            try {
-                const data = await get("settings", { admin: false });
-                let globalPaused = null;
-                if (Array.isArray(data)) {
-                    const globalSettings = data.find((s) => s.id === "global");
-                    if (globalSettings) globalPaused = globalSettings.emailNotificationsPaused === true;
-                } else if (data && typeof data === "object") {
-                    globalPaused = data.emailNotificationsPaused === true;
-                }
-                if (globalPaused !== null && !cancelled) {
-                    setEmailNotificationsPaused(globalPaused);
-                    setPaused(globalPaused);
-                }
-            } catch {
-                /* keep local */
-            }
+        const apply = (data) => {
+            const globalPaused = pausedFromSettings(data);
+            if (globalPaused === null) return;
+            setEmailNotificationsPaused(globalPaused);
+            setPaused(globalPaused);
         };
-        sync();
-        const id = setInterval(sync, 10000);
-        return () => { cancelled = true; clearInterval(id); };
+        return watch("settings", apply, { admin: false });
     }, []);
 
     useEffect(() => {
         const onMessage = (event) => {
-            if (!event.data) return;
+            if (!isTrustedGithubMessage(event)) return;
             if (event.data.type === "GITHUB_CONNECTED") {
                 if (event.data.token) setGithubPat(event.data.token);
             } else if (event.data.type === "GITHUB_DISCONNECTED") {

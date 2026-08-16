@@ -5,6 +5,12 @@ const nextConfig = {
     unoptimized: true,
   },
   trailingSlash: true,
+  experimental: {
+    proxyClientMaxBodySize: "32mb",
+    serverActions: {
+      bodySizeLimit: "32mb",
+    },
+  },
   // GitHub Pages project site: https://kakaiking.github.io/Internal-App/
   // Drop basePath when moving to dedicated host (see docs/IMPLEMENTATION_PLAN.md).
   basePath: "/Internal-App",

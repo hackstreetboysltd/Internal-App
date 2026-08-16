@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { approve, get, GoalUser, reject, save } from "@/lib/portalApi";
+import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { notifyAssigneeOfGoal, notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 import {
     HORIZONS,
     HORIZON_OPTIONS,
@@ -310,22 +311,40 @@ export default function GoalsClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(async () => {
-            const tabParam = searchParams.get("tab");
-            if (tabParam && HORIZONS.includes(tabParam)) {
-                setCurrentTab(tabParam);
-                setTimeframe(tabParam);
-                setHorizon(tabParam);
-            }
-            setLoading(true);
-            try {
-                await loadAll();
-            } finally {
-                setLoading(false);
-            }
-        }, 0);
-        return () => clearTimeout(t);
-    }, [loadAll, searchParams]);
+        const tabParam = searchParams.get("tab");
+        if (tabParam && HORIZONS.includes(tabParam)) {
+            setCurrentTab(tabParam);
+            setTimeframe(tabParam);
+            setHorizon(tabParam);
+        }
+        setLoading(true);
+        const seen = new Set();
+        const mark = (key) => {
+            seen.add(key);
+            if (seen.size >= 4) setLoading(false);
+        };
+        const unsubs = [
+            watch("goals", (d) => {
+                setRecords(Array.isArray(d) ? d : []);
+                mark("goals");
+            }, { onError: (e) => { console.error("Error fetching workspace goals:", e); setRecords([]); mark("goals"); } }),
+            watch("profile", (d) => {
+                setUsers(Array.isArray(d) ? d : []);
+                mark("profile");
+            }, { onError: () => { setUsers([]); mark("profile"); } }),
+            watch("apps", (d) => {
+                const nextApps = Array.isArray(d) ? d.slice() : [];
+                nextApps.sort((a, b) => (b.name || "").length - (a.name || "").length);
+                setApps(nextApps);
+                mark("apps");
+            }, { onError: () => { setApps([]); mark("apps"); } }),
+            watch("role_access", (d) => {
+                setAllowedEmails(allowedEmailsFromRoleAccess(d));
+                mark("role_access");
+            }, { admin: false, onError: () => { setAllowedEmails([]); mark("role_access"); } }),
+        ];
+        return () => unsubs.forEach((u) => u());
+    }, [searchParams]);
 
     const persistGoals = async (list, { skipReload } = {}) => {
         try {
@@ -592,8 +611,10 @@ export default function GoalsClient() {
             }
 
             const periodId = computePeriodId(currentTab);
+            const now = nextItemId();
             const record = {
-                id: nextItemId(),
+                id: now,
+                createdAt: new Date(now).toISOString(),
                 user: targetUser,
                 email: targetEmail,
                 goals: itemsArray.map((item) => ({ text: item, done: false })),
@@ -1202,17 +1223,21 @@ export default function GoalsClient() {
                     <>
                         <div className="header-actions" style={{ marginBottom: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                             <div className="search-input-wrapper" style={{ flex: 1 }}>
-                                <input type="text" placeholder="Enter keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setAdminPage(1); }} />
+                                <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setAdminPage(1); }} />
                             </div>
-                            <button type="button" onClick={() => openModal(setLbOpen, setLbShown)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="View Leaderboard">
-                                <i className="fa-solid fa-trophy"></i>
-                            </button>
-                            <button type="button" onClick={() => openReassign(null)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="Reassign goals to another user">
-                                <i className="fa-solid fa-user-pen"></i> Reassign
-                            </button>
-                            <button type="button" onClick={openUnifiedNew} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }}>
-                                <i className="fa-solid fa-plus"></i> New {capitalize(currentTab)} Goal
-                            </button>
+                            <div className="header-actions-tools">
+                                <button type="button" className="header-actions-icon-btn" onClick={() => openModal(setLbOpen, setLbShown)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="View Leaderboard">
+                                    <i className="fa-solid fa-trophy"></i>
+                                </button>
+                                <button type="button" onClick={() => openReassign(null)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="Reassign goals to another user">
+                                    <i className="fa-solid fa-user-pen"></i> Reassign
+                                </button>
+                            </div>
+                            <div className="header-actions-primary">
+                                <button type="button" onClick={openUnifiedNew} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }}>
+                                    <i className="fa-solid fa-plus"></i> New {capitalize(currentTab)} Goal
+                                </button>
+                            </div>
                         </div>
                         <div style={{ borderBottom: "1px solid var(--border-color)", marginBottom: 24 }}>
                             <div className="tabs-container" style={{ borderBottom: "none", marginBottom: 0, display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -1260,14 +1285,12 @@ export default function GoalsClient() {
                                                             </button>
                                                         )}
                                                         {isOwner && (
-                                                            <>
-                                                                <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(251,113,133,0.1)", color: ACCENT, marginBottom: 0 }} onClick={() => openUnifiedEdit(record.id)}>
-                                                                    <i className="fa-solid fa-pen"></i>
-                                                                </button>
-                                                                <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239,68,68,0.1)", color: "#ef4444", marginBottom: 0 }} onClick={() => deleteAdminRecord(record.id)}>
-                                                                    <i className="fa-solid fa-trash"></i>
-                                                                </button>
-                                                            </>
+                                                            <ItemMenu
+                                                                items={[
+                                                                    { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
+                                                                    { label: "Delete", onClick: () => deleteAdminRecord(record.id), danger: true },
+                                                                ]}
+                                                            />
                                                         )}
                                                     </div>
                                                 </div>
@@ -1303,21 +1326,23 @@ export default function GoalsClient() {
                     </>
                 ) : (
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16, flexWrap: "wrap" }}>
-                            <div className="search-input-wrapper" style={{ flex: 1, minWidth: 180 }}>
-                                <input type="text" placeholder="Enter keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setWorkspacePage(1); }} />
+                        <div className="workspace-toolbar">
+                            <div className="search-input-wrapper">
+                                <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setWorkspacePage(1); }} />
                             </div>
-                            <button
-                                type="button"
-                                className="sort-created-btn"
-                                title={sortDir === "desc" ? "Newest first" : "Oldest first"}
-                                onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setWorkspacePage(1); }}
-                            >
-                                <i className={`fa-solid ${sortDir === "desc" ? "fa-arrow-down-wide-short" : "fa-arrow-up-wide-short"}`}></i>
-                            </button>
-                            <WorkspaceSelect title="Filter by timeframe" value={timeframe} options={HORIZON_OPTIONS} onChange={(v) => { setTimeframe(v); setWorkspacePage(1); }} />
-                            <WorkspaceSelect title="Filter by team member" value={memberFilter} options={memberOptions} onChange={(v) => { setMemberFilter(v); setWorkspacePage(1); }} />
-                            <button type="button" className="add-goal-btn" onClick={openUnifiedNew} style={{ width: "auto", marginBottom: 0, background: ACCENT, borderColor: ACCENT, color: "white", flexShrink: 0 }}>
+                            <div className="workspace-toolbar-filters">
+                                <button
+                                    type="button"
+                                    className="sort-created-btn"
+                                    title={sortDir === "desc" ? "Newest first" : "Oldest first"}
+                                    onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setWorkspacePage(1); }}
+                                >
+                                    <i className={`fa-solid ${sortDir === "desc" ? "fa-arrow-down-wide-short" : "fa-arrow-up-wide-short"}`}></i>
+                                </button>
+                                <WorkspaceSelect title="Filter by timeframe" value={timeframe} options={HORIZON_OPTIONS} onChange={(v) => { setTimeframe(v); setWorkspacePage(1); }} />
+                                <WorkspaceSelect title="Filter by team member" value={memberFilter} options={memberOptions} onChange={(v) => { setMemberFilter(v); setWorkspacePage(1); }} />
+                            </div>
+                            <button type="button" className="add-goal-btn" onClick={openUnifiedNew}>
                                 <i className="fa-solid fa-plus"></i> New Goal
                             </button>
                         </div>
@@ -1349,18 +1374,25 @@ export default function GoalsClient() {
                                                         <span className="workspace-goal-footer-meta">{typeLabel} • {recordEmail || "Unknown"}</span>
                                                     </div>
                                                 </div>
-                                                {showActions && (
-                                                    <div className="workspace-goal-actions">
-                                                        <button type="button" className="secondary-btn" title="Edit goal group" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(251,113,133,0.1)", color: ACCENT, marginBottom: 0 }} onClick={(e) => { e.stopPropagation(); openUnifiedEdit(record.id); }}>
-                                                            <i className="fa-solid fa-pen"></i>
-                                                        </button>
-                                                        <button type="button" className="secondary-btn" title="Delete goal group" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239,68,68,0.1)", color: "#ef4444", marginBottom: 0 }} onClick={(e) => { e.stopPropagation(); deleteWorkspaceRecord(record.id); }}>
-                                                            <i className="fa-solid fa-trash"></i>
-                                                        </button>
+                                                {showActions ? (
+                                                    <div className="workspace-goal-aside">
+                                                        <div className="workspace-goal-actions">
+                                                            <ItemMenu
+                                                                items={[
+                                                                    { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
+                                                                    { label: "Delete", onClick: () => deleteWorkspaceRecord(record.id), danger: true },
+                                                                ]}
+                                                            />
+                                                        </div>
+                                                        {createdStamp.time ? (
+                                                            <div className="goal-created-stamp" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
+                                                                <span className="goal-created-time">{createdStamp.time}</span>
+                                                                <span className="goal-created-date">{createdStamp.date}</span>
+                                                            </div>
+                                                        ) : null}
                                                     </div>
-                                                )}
-                                                {createdStamp.time ? (
-                                                    <div className="goal-created-stamp" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
+                                                ) : createdStamp.time ? (
+                                                    <div className="goal-created-stamp is-overlay" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
                                                         <span className="goal-created-time">{createdStamp.time}</span>
                                                         <span className="goal-created-date">{createdStamp.date}</span>
                                                     </div>

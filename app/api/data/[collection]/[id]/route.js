@@ -7,15 +7,11 @@ import {
   patchCollectionItem,
   softDeleteCollectionItem,
 } from "@/lib/server/collectionsDb";
+import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
 import { withApi } from "@/lib/server/withApi";
 
 export const dynamic = "force-dynamic";
-
-function readAdminView(request) {
-  const url = new URL(request.url);
-  return url.searchParams.get("admin") === "1" || url.searchParams.get("adminView") === "1";
-}
 
 async function ensureAllowedReader(session) {
   if (!session?.email) return false;
@@ -66,7 +62,7 @@ export const PATCH = withApi(async (request, routeContext, { session }) => {
     oldCollection,
     merged,
     { name: session.name, email: session.email },
-    { adminView: readAdminView(request), users },
+    { adminView: effectiveAdminView(request, session), users },
   );
 
   if (!auth.ok) {
@@ -98,7 +94,7 @@ export const DELETE = withApi(async (request, routeContext, { session }) => {
     oldCollection,
     merged,
     { name: session.name, email: session.email },
-    { adminView: readAdminView(request), users },
+    { adminView: effectiveAdminView(request, session), users },
   );
 
   if (!auth.ok) {

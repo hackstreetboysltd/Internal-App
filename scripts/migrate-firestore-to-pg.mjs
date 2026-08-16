@@ -51,6 +51,7 @@ export const MIGRATABLE_COLLECTIONS = [
   "meetings",
   "messages",
   "apps",
+  "documents",
   "profile",
   "auth",
   "settings",

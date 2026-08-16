@@ -137,7 +137,7 @@
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(52, 211, 153, 0.25) !important;
 }
-.messages-module .accordion-card.has-visible-actions .msg-card-body { padding-right: 56px; }
+.messages-module .accordion-card.has-visible-actions .msg-card-body { padding-right: 36px; }
 
 .messages-module .msg-card-body {
     font-size: 0.9rem;

@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { approve, get, reject, save } from "@/lib/portalApi";
+import { get, reject, approve, save, watch } from "@/lib/portalApi";
+import { nextPortalId } from "@/lib/portalTime";
 import { trackActivity } from "@/lib/activityTracker";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 import RteEditor from "./RteEditor";
 import { getEditorHtml, stripHtml } from "./html";
 
 function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 const ICON_BTN = {
@@ -136,9 +138,19 @@ export default function AppsClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(() => { loadApps(); }, 0);
-        return () => clearTimeout(t);
-    }, [loadApps]);
+        setLoading(true);
+        const unsub = watch("apps", (list) => {
+            setApps(Array.isArray(list) ? list : []);
+            setLoading(false);
+        }, {
+            onError: (e) => {
+                console.error("Error loading apps:", e);
+                setApps([]);
+                setLoading(false);
+            },
+        });
+        return unsub;
+    }, []);
 
     const saveApps = async (list) => {
         try {
@@ -350,14 +362,16 @@ export default function AppsClient() {
                         <input
                             type="text"
                             id="searchApps"
-                            placeholder="Enter keyword..."
+                            placeholder="Search keyword..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button type="button" className="new-app-btn" onClick={openRegister}>
-                        New App
-                    </button>
+                    <div className="header-actions-primary">
+                        <button type="button" className="new-app-btn" onClick={openRegister}>
+                            New App
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
@@ -426,22 +440,12 @@ export default function AppsClient() {
                                                     </div>
                                                 ) : !isAdminView && isOwner ? (
                                                     <div className="app-card-actions" onClick={(e) => e.stopPropagation()}>
-                                                        <button
-                                                            type="button"
-                                                            className="secondary-btn"
-                                                            style={{ padding: "6px 10px", fontSize: "0.75rem", width: "auto", borderRadius: 6, background: "rgba(68, 239, 68, 0.1)", color: "#44ef44", border: "1px solid rgba(239, 239, 68, 0.2)", transition: "all 0.2s" }}
-                                                            onClick={() => openEdit(app.id)}
-                                                        >
-                                                            <i className="fa-solid fa-pen"></i>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="secondary-btn"
-                                                            style={{ padding: "6px 10px", fontSize: "0.75rem", width: "auto", borderRadius: 6, background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)", transition: "all 0.2s" }}
-                                                            onClick={() => deleteApp(app.id)}
-                                                        >
-                                                            <i className="fa-solid fa-trash"></i>
-                                                        </button>
+                                                        <ItemMenu
+                                                            items={[
+                                                                { label: "Edit", onClick: () => openEdit(app.id) },
+                                                                { label: "Delete", onClick: () => deleteApp(app.id), danger: true },
+                                                            ]}
+                                                        />
                                                     </div>
                                                 ) : null}
                                             </div>

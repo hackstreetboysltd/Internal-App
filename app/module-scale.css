@@ -1,0 +1,825 @@
+/* Fluid mobile scale for portal modules + modals (< 600px).
+   Mirrors the Goals toolbar/content pattern: search full-width, tools on the
+   next row, primary CTA centered, and content that eases down with viewport. */
+
+.header-actions-tools,
+.header-actions-primary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.header-actions-menu {
+    position: relative;
+}
+
+.header-actions-icon-btn {
+    box-sizing: border-box;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    flex-shrink: 0;
+}
+
+@media (max-width: 599px) {
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) {
+        --mod-h: clamp(2rem, 4.2vw + 1.1rem, 2.5rem);
+        --mod-fs: clamp(0.72rem, 1.15vw + 0.5rem, 0.85rem);
+        --mod-gap: clamp(0.4rem, 1.5vw + 0.1rem, 0.625rem);
+        --mod-pad-x: clamp(0.5rem, 1.8vw + 0.15rem, 0.9rem);
+        --mod-pad-y: clamp(0.5rem, 1.7vw + 0.16rem, 0.75rem);
+        --mod-text: clamp(0.75rem, 1.35vw + 0.48rem, 0.9rem);
+        --mod-meta: clamp(0.62rem, 1.05vw + 0.42rem, 0.75rem);
+        --mod-title: clamp(1.15rem, 3.4vw + 0.45rem, 1.8rem);
+        --mod-heading: clamp(0.95rem, 2.2vw + 0.5rem, 1.25rem);
+        --mod-card-pad: clamp(0.7rem, 2.2vw + 0.3rem, 1.125rem);
+        --mod-icon: clamp(1.1rem, 2.2vw + 0.6rem, 1.375rem);
+        --mod-icon-fs: clamp(0.7rem, 0.9vw + 0.52rem, 0.82rem);
+        --mod-radius: clamp(0.5rem, 1.4vw + 0.22rem, 0.75rem);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-container {
+        margin-bottom: clamp(0.85rem, 3vw, 1.5rem) !important;
+        padding-bottom: clamp(0.65rem, 2.4vw, 1rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-container h2 {
+        font-size: var(--mod-title) !important;
+        gap: clamp(0.35rem, 1.4vw, 0.6rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions {
+        flex-wrap: wrap !important;
+        gap: var(--mod-gap) !important;
+        margin-bottom: clamp(0.85rem, 3vw, 1.5rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions > .search-input-wrapper {
+        flex: 1 1 100% !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions .search-input-wrapper input {
+        height: var(--mod-h) !important;
+        padding: 0 var(--mod-pad-x) !important;
+        font-size: var(--mod-fs) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-tools {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+        gap: var(--mod-gap);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-primary {
+        flex: 1 1 100%;
+        width: 100%;
+        justify-content: center;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-primary > button,
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-primary .header-actions-menu > button {
+        width: auto !important;
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+        padding: 0 clamp(0.9rem, 3.5vw + 0.2rem, 1.15rem) !important;
+        margin-bottom: 0 !important;
+        flex-shrink: 0;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-icon-btn {
+        width: var(--mod-h) !important;
+        min-width: var(--mod-h) !important;
+        height: var(--mod-h) !important;
+        padding: 0 !important;
+        font-size: var(--mod-fs) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .header-actions-tools > button:not(.avatar-btn):not(.header-actions-icon-btn) {
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+        padding: 0 var(--mod-pad-x) !important;
+        width: auto !important;
+        margin-bottom: 0 !important;
+    }
+
+    .profile-module .avatar-btn {
+        width: var(--mod-h) !important;
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) h3 {
+        font-size: var(--mod-heading);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .empty-state {
+        padding: clamp(1.25rem, 6vw, 2.5rem) clamp(0.75rem, 4vw, 1.25rem);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .empty-state p {
+        font-size: var(--mod-text) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .card {
+        padding: var(--mod-card-pad);
+        border-radius: var(--mod-radius);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module
+    ) .card h4,
+    .profile-module .member-info h4 {
+        font-size: clamp(0.88rem, 2vw + 0.5rem, 1.15rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module
+    ) .card p,
+    .profile-module .member-info p,
+    .profile-module .member-bio {
+        font-size: var(--mod-text) !important;
+    }
+
+    .apps-module .apps-grid,
+    .apps-module .apps-skeleton,
+    .profile-module .team-grid,
+    .profile-module .profile-skeleton {
+        gap: clamp(0.75rem, 3vw, 1.25rem);
+        grid-template-columns: 1fr;
+    }
+
+    .apps-module .clickable-card,
+    .apps-module .skel-app-card {
+        min-height: clamp(6.5rem, 22vw, 8.25rem);
+        gap: clamp(0.5rem, 2vw, 0.75rem);
+    }
+
+    .apps-module .app-card-desc {
+        font-size: var(--mod-text);
+        min-height: 0;
+        -webkit-line-clamp: 4;
+    }
+
+    .apps-module .tab-btn,
+    .goals-module .tab-btn {
+        padding: clamp(0.5rem, 2vw, 0.75rem) clamp(0.7rem, 3vw, 1.25rem) !important;
+        font-size: var(--mod-fs) !important;
+    }
+
+    .apps-module .app-desc-html {
+        font-size: var(--mod-text) !important;
+    }
+
+    :is(.skills-module, .procedures-module, .goals-module) .accordion-card {
+        padding: clamp(0.4rem, 1.6vw + 0.1rem, 0.75rem) !important;
+        border-radius: var(--mod-radius) !important;
+    }
+
+    :is(.skills-module, .procedures-module, .goals-module) .accordion-card strong {
+        font-size: var(--mod-text) !important;
+    }
+
+    :is(.skills-module, .procedures-module) .accordion-card > div:last-child {
+        font-size: var(--mod-meta) !important;
+    }
+
+    :is(.skills-module, .procedures-module, .messages-module) .list-container,
+    .goals-module .goalsHistory {
+        gap: var(--mod-gap);
+    }
+
+    .messages-module .msg-stream {
+        gap: var(--mod-gap);
+    }
+
+    .messages-module .accordion-card {
+        padding: var(--mod-pad-y) var(--mod-pad-x) !important;
+        border-radius: var(--mod-radius) !important;
+    }
+
+    .messages-module .msg-card-body {
+        font-size: var(--mod-text) !important;
+    }
+
+    .messages-module .msg-card-body.is-locked {
+        font-size: clamp(0.68rem, 1.1vw + 0.45rem, 0.8rem) !important;
+    }
+
+    .messages-module .msg-card-footer {
+        font-size: var(--mod-meta) !important;
+        margin-top: clamp(0.25rem, 1.2vw + 0.08rem, 0.375rem);
+        padding-right: clamp(3.25rem, 16vw, 4.5rem);
+    }
+
+    .messages-module .msg-created-time {
+        font-size: clamp(0.58rem, 0.95vw + 0.4rem, 0.72rem);
+    }
+
+    .messages-module .msg-created-date {
+        font-size: clamp(0.54rem, 0.9vw + 0.37rem, 0.68rem);
+    }
+
+    .messages-module .msg-card-actions {
+        top: var(--mod-pad-y);
+        right: var(--mod-pad-x);
+    }
+
+    .messages-module .msg-created-stamp {
+        right: var(--mod-pad-x);
+        bottom: var(--mod-pad-y);
+    }
+
+    .messages-module .channel-tabs .channel-tab {
+        font-size: var(--mod-fs) !important;
+        padding: 0 clamp(0.6rem, 2.4vw, 0.85rem) !important;
+        height: var(--mod-h) !important;
+    }
+
+    .messages-module .vault-bar-row .vault-action-btn {
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+        padding: 0 var(--mod-pad-x) !important;
+    }
+
+    .messages-module .password-field input {
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+        padding: 0 2.4rem 0 var(--mod-pad-x) !important;
+    }
+
+    .profile-module .member-card,
+    .profile-module .skel-member-card {
+        padding: var(--mod-card-pad);
+        border-radius: var(--mod-radius);
+    }
+
+    .profile-module .member-avatar,
+    .profile-module .skel-avatar {
+        width: clamp(2.25rem, 8vw + 0.6rem, 3.125rem);
+        height: clamp(2.25rem, 8vw + 0.6rem, 3.125rem);
+        font-size: clamp(0.8rem, 2.4vw, 1.125rem);
+    }
+
+    .profile-module .member-dept,
+    .profile-module .badge {
+        font-size: clamp(0.6rem, 1vw + 0.38rem, 0.75rem);
+        padding: 2px clamp(0.35rem, 1.4vw, 0.5rem);
+    }
+
+    .profile-module .large-avatar {
+        width: clamp(4rem, 18vw, 5.625rem);
+        height: clamp(4rem, 18vw, 5.625rem);
+        font-size: clamp(1.25rem, 5vw, 2rem);
+    }
+
+    .profile-module .profile-name {
+        font-size: clamp(1.05rem, 2.8vw + 0.4rem, 1.4rem);
+    }
+
+    .profile-module .profile-email,
+    .profile-module .profile-meta-item {
+        font-size: var(--mod-text);
+    }
+
+    .profile-module .modal-body label {
+        font-size: var(--mod-meta);
+    }
+
+    .documents-module .doc-grid,
+    .documents-module .docs-skeleton {
+        gap: clamp(0.85rem, 4vw, 1.25rem) clamp(0.7rem, 3.5vw, 1rem);
+        padding-top: clamp(0.5rem, 2vw, 0.875rem);
+    }
+
+    .documents-module .doc-tile {
+        width: clamp(6.5rem, 28vw, 9.25rem);
+        gap: clamp(0.35rem, 1.4vw, 0.5rem);
+    }
+
+    .documents-module .skel-tile {
+        width: clamp(6.5rem, 28vw, 9.25rem);
+        height: clamp(5.5rem, 24vw, 7.375rem);
+        gap: clamp(0.35rem, 1.4vw, 0.5rem);
+    }
+
+    .documents-module .skel-tile::before {
+        width: clamp(2.25rem, 10vw, 3rem);
+        height: clamp(2.25rem, 10vw, 3rem);
+    }
+
+    .documents-module .doc-tile-icon {
+        width: clamp(2.75rem, 12vw, 4rem);
+        height: clamp(2.75rem, 12vw, 4rem);
+        font-size: clamp(1.55rem, 6.5vw, 2.35rem);
+    }
+
+    .documents-module .doc-tile-name {
+        font-size: clamp(0.68rem, 1.6vw + 0.38rem, 0.82rem);
+    }
+
+    .documents-module .doc-tile-meta {
+        font-size: clamp(0.58rem, 1.1vw + 0.35rem, 0.7rem);
+    }
+
+    .calendar-module .cal-nav {
+        gap: var(--mod-gap);
+        margin-bottom: clamp(0.7rem, 2.6vw, 1rem);
+    }
+
+    .calendar-module .cal-nav-btn {
+        width: var(--mod-h) !important;
+        height: var(--mod-h) !important;
+        font-size: var(--mod-fs) !important;
+        border-radius: var(--mod-radius) !important;
+    }
+
+    .calendar-module .cal-month-btn {
+        font-size: clamp(0.88rem, 2.4vw + 0.4rem, 1.15rem) !important;
+        padding: 4px 8px !important;
+    }
+
+    .calendar-module .cal-legend {
+        gap: clamp(0.5rem, 3vw, 1.125rem);
+        margin-bottom: clamp(0.7rem, 2.6vw, 1rem);
+    }
+
+    .calendar-module .cal-legend-item {
+        font-size: var(--mod-meta) !important;
+        padding: 3px 8px !important;
+    }
+
+    .calendar-module .cal-weekdays {
+        font-size: clamp(0.52rem, 1.4vw + 0.28rem, 0.72rem);
+        margin-bottom: clamp(0.3rem, 1.2vw, 0.5rem);
+    }
+
+    .calendar-module .cal-grid,
+    .calendar-module .cal-skeleton {
+        gap: clamp(0.2rem, 1.2vw, 0.5rem);
+    }
+
+    .calendar-module .cal-day,
+    .calendar-module .cal-skeleton .skel-day {
+        min-height: clamp(2.6rem, 14vw, 3.4rem);
+        padding: clamp(0.25rem, 1.4vw, 0.4rem);
+        border-radius: clamp(0.4rem, 1.6vw, 0.5rem);
+        gap: 3px;
+    }
+
+    .calendar-module .cal-day-num {
+        font-size: clamp(0.62rem, 1.6vw + 0.3rem, 0.78rem);
+    }
+
+    .calendar-module .day-item {
+        padding: var(--mod-pad-y) var(--mod-pad-x);
+        gap: var(--mod-gap);
+        border-radius: var(--mod-radius);
+        font-size: var(--mod-text);
+    }
+
+    .calendar-module .day-item-kind {
+        font-size: clamp(0.52rem, 1.2vw + 0.28rem, 0.65rem);
+        padding: 1px clamp(0.3rem, 1.2vw, 0.45rem);
+    }
+
+    .observability-module .obs-toolbar {
+        flex-wrap: wrap;
+        gap: clamp(0.4rem, 1.5vw + 0.1rem, 0.625rem);
+        padding: clamp(0.5rem, 2vw, 0.75rem);
+    }
+
+    .observability-module .obs-toolbar input {
+        flex: 1 1 100%;
+        min-width: 0;
+        font-size: clamp(0.72rem, 1.15vw + 0.5rem, 0.85rem);
+        padding: 0.45rem 0.7rem;
+    }
+
+    .observability-module .obs-toolbar select,
+    .observability-module .obs-toolbar label,
+    .observability-module .obs-panel-head h3 {
+        font-size: clamp(0.72rem, 1.15vw + 0.5rem, 0.85rem);
+    }
+
+    .observability-module .obs-stat-card .value {
+        font-size: clamp(1rem, 3vw + 0.45rem, 1.35rem);
+    }
+
+    .role-access-module .form-panel {
+        padding: var(--mod-card-pad);
+        border-radius: var(--mod-radius);
+    }
+
+    .role-access-module .form-panel h3 {
+        font-size: var(--mod-heading);
+        margin-bottom: clamp(0.7rem, 2.5vw, 1.25rem);
+        gap: var(--mod-gap);
+    }
+
+    .role-access-module p {
+        font-size: var(--mod-text) !important;
+        line-height: 1.45;
+    }
+
+    .role-access-module input,
+    .role-access-module button {
+        font-size: var(--mod-fs) !important;
+        padding: clamp(0.55rem, 2vw, 0.75rem) var(--mod-pad-x) !important;
+    }
+
+    .role-access-module .email-item {
+        padding: clamp(0.4rem, 1.6vw, 0.5rem) var(--mod-pad-x);
+        border-radius: var(--mod-radius);
+        font-size: var(--mod-text);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .item-menu button.item-menu-btn {
+        width: var(--mod-icon) !important;
+        min-width: var(--mod-icon) !important;
+        height: var(--mod-icon) !important;
+        font-size: var(--mod-icon-fs) !important;
+        border-radius: clamp(0.25rem, 0.8vw + 0.1rem, 0.375rem);
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal {
+        padding: clamp(0.6rem, 3vw, 1.25rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal .modal-content {
+        padding: clamp(0.85rem, 3.2vw + 0.25rem, 1.25rem) !important;
+        border-radius: clamp(0.65rem, 2vw, 0.75rem) !important;
+        max-height: calc(100vh - 72px) !important;
+        width: 100% !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-header {
+        padding-bottom: clamp(0.4rem, 1.6vw, 0.75rem) !important;
+        margin-bottom: clamp(0.55rem, 2vw, 1rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-header h3 {
+        font-size: clamp(0.95rem, 2.6vw + 0.4rem, 1.3rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .close-btn {
+        font-size: clamp(1.15rem, 3.2vw, 1.5rem) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body {
+        font-size: var(--mod-text) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body input,
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body textarea,
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body select,
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body button {
+        font-size: var(--mod-fs) !important;
+        padding: clamp(0.55rem, 2vw, 0.75rem) var(--mod-pad-x) !important;
+    }
+
+    :is(
+        .apps-module,
+        .goals-module,
+        .skills-module,
+        .procedures-module,
+        .messages-module,
+        .profile-module,
+        .documents-module,
+        .calendar-module,
+        .role-access-module
+    ) .modal-body label {
+        font-size: var(--mod-meta) !important;
+    }
+
+    .goals-module .custom-dialog-overlay {
+        padding: clamp(0.6rem, 3vw, 1.25rem);
+    }
+
+    .goals-module .custom-dialog-box {
+        padding: clamp(0.85rem, 3.2vw + 0.25rem, 1.25rem);
+        border-radius: var(--mod-radius);
+    }
+
+    .goals-module .custom-dialog-title {
+        font-size: clamp(0.92rem, 2.4vw + 0.4rem, 1.1rem);
+    }
+
+    .goals-module .custom-dialog-body {
+        font-size: var(--mod-text);
+    }
+
+    .goals-module .custom-dialog-btn {
+        font-size: var(--mod-fs) !important;
+        padding: clamp(0.4rem, 1.6vw, 0.5rem) clamp(0.7rem, 2.8vw, 1rem) !important;
+    }
+
+    .session-modal {
+        padding: clamp(0.6rem, 3vw, 1.25rem);
+    }
+
+    .session-modal-content {
+        padding: clamp(1.1rem, 5vw, 2.25rem) !important;
+        border-radius: clamp(0.85rem, 3vw, 1.5rem);
+    }
+
+    .session-modal-content h2 {
+        font-size: clamp(1.15rem, 3.4vw + 0.4rem, 1.6rem);
+    }
+
+    .session-modal-content p {
+        font-size: var(--mod-text, clamp(0.78rem, 1.5vw + 0.5rem, 0.95rem));
+        margin-bottom: clamp(1rem, 4vw, 1.75rem);
+    }
+
+    #sessionRelogBtn {
+        font-size: var(--mod-fs, clamp(0.78rem, 1.5vw + 0.5rem, 0.95rem));
+        padding: clamp(0.65rem, 2.4vw, 0.875rem) clamp(0.9rem, 3vw, 1.5rem);
+    }
+}

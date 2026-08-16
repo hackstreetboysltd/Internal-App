@@ -1,7 +1,9 @@
+import { formatPortalCreatedStamp, nextPortalId } from "@/lib/portalTime";
+
 export const ITEMS_PER_PAGE = 5;
 
 export function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 export function persistableCollection(list) {
@@ -30,22 +32,7 @@ export function getMessageCreatedTime(m) {
 }
 
 export function formatMessageCreatedStamp(m) {
-    const ms = getMessageCreatedTime(m);
-    if (!ms) return { time: "", date: "" };
-    const d = new Date(ms);
-    if (Number.isNaN(d.getTime())) return { time: "", date: "" };
-
-    let hours = d.getHours();
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    if (hours === 0) hours = 12;
-    const time = `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
-
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    return { time, date: `${day}/${month}/${year}` };
+    return formatPortalCreatedStamp(getMessageCreatedTime(m));
 }
 
 export function messageEmail(m, users) {

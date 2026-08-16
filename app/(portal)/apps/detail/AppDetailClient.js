@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { get, githubCommits, githubStatus, save, PortalApiError } from "@/lib/portalApi";
+import { get, githubCommits, githubStatus, save, PortalApiError, watch } from "@/lib/portalApi";
+import { nextPortalId } from "@/lib/portalTime";
 import { trackActivity } from "@/lib/activityTracker";
+import { isTrustedGithubMessage } from "@/lib/githubMessage";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { sanitizeHtml } from "../html";
 
 function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 const ICON_BTN = {
@@ -105,6 +107,7 @@ export default function AppDetailClient() {
     const searchParams = useSearchParams();
     const { actor, isAdminView } = useSession();
     const actorRef = useRef(actor);
+    const trackedAppRef = useRef(null);
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const appId = searchParams.get("id");
@@ -233,12 +236,42 @@ export default function AppDetailClient() {
     }, [appId, loadAssociatedGoals, loadGithubCommits]);
 
     useEffect(() => {
-        const t = setTimeout(() => { loadAppDetail(); }, 0);
-        return () => clearTimeout(t);
-    }, [loadAppDetail]);
+        if (!appId) return undefined;
+        setLoading(true);
+        const unsub = watch("apps", (apps) => {
+            const found = (Array.isArray(apps) ? apps : []).find((a) => sameId(a.id, appId));
+            if (!found) {
+                setApp(null);
+                setNotFound(true);
+                setLoading(false);
+                return;
+            }
+            setNotFound(false);
+            setApp(found);
+            loadAssociatedGoals(found);
+            if (trackedAppRef.current !== String(found.id)) {
+                trackedAppRef.current = String(found.id);
+                trackActivity("apps.view_detail", `/apps/detail/?id=${found.id}`, {
+                    appId: found.id,
+                    appName: found.name,
+                });
+                loadGithubCommits(found);
+            }
+            setLoading(false);
+        }, {
+            onError: (e) => {
+                console.error("Error loading apps:", e);
+                setApp(null);
+                setNotFound(true);
+                setLoading(false);
+            },
+        });
+        return unsub;
+    }, [appId, loadAssociatedGoals, loadGithubCommits]);
 
     useEffect(() => {
         const onMessage = (event) => {
+            if (!isTrustedGithubMessage(event)) return;
             if (event.data?.type === "GITHUB_CONNECTED") {
                 if (app) loadGithubCommits(app);
             }

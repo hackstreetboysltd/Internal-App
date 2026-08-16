@@ -7,6 +7,7 @@ import {
   postgresWarnings,
   redisWarnings,
 } from "@/lib/server/cloudProviders";
+import { realNowIso } from "@/lib/server/realTime";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ async function handler() {
       },
       warnings: warnings.length ? warnings : undefined,
       checks,
-      timestamp: new Date().toISOString(),
+      timestamp: realNowIso(),
     },
     { status: ok ? 200 : 503 },
   );

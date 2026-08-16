@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { get, GoalUser, save } from "@/lib/portalApi";
+import { get, GoalUser, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 import RteEditor from "../apps/RteEditor";
 import { escapeHtml, getEditorHtml, sanitizeHtml, stripHtml } from "../apps/html";
 import {
@@ -27,6 +28,7 @@ import {
     normalizeChannel,
     setVaultPassphrase,
 } from "./crypto";
+import { formatPortalDateTime } from "@/lib/portalTime";
 import {
     ITEMS_PER_PAGE,
     cloneMessages,
@@ -316,19 +318,40 @@ export default function MessagesClient() {
     useEffect(() => {
         const onHide = () => clearWrapKeyCache();
         window.addEventListener("pagehide", onHide);
-        const t = setTimeout(async () => {
-            setLoading(true);
-            try {
-                await loadMessages();
-            } finally {
-                setLoading(false);
-            }
-        }, 0);
+        setLoading(true);
+        const seen = new Set();
+        const mark = (key) => {
+            seen.add(key);
+            if (seen.size >= 2) setLoading(false);
+        };
+        const u1 = watch("messages", (raw) => {
+            const list = Array.isArray(raw) ? raw : [];
+            setMessages(list.filter(isEnvelopeMessage).map((m) => ({
+                ...m,
+                channel: messageChannel(m),
+            })));
+            mark("messages");
+        }, {
+            admin: false,
+            onError: (e) => {
+                console.error("Error fetching messages:", e);
+                setMessages([]);
+                mark("messages");
+            },
+        });
+        const u2 = watch("profile", (profileData) => {
+            setUsers(Array.isArray(profileData) ? profileData : []);
+            mark("profile");
+        }, {
+            admin: false,
+            onError: () => mark("profile"),
+        });
         return () => {
-            clearTimeout(t);
+            u1();
+            u2();
             window.removeEventListener("pagehide", onHide);
         };
-    }, [loadMessages]);
+    }, []);
 
     useEffect(() => {
         const t = setTimeout(() => { ensureIdentity(actorEmail); }, 0);
@@ -521,7 +544,7 @@ export default function MessagesClient() {
             email: (current.email || "").trim().toLowerCase(),
             channel,
             ...envelope,
-            timestamp: new Date(now).toLocaleTimeString(),
+            timestamp: formatPortalDateTime(now),
         };
         if (channel !== DIRECT_CHANNEL) delete record.to;
         list.push(record);
@@ -697,13 +720,15 @@ export default function MessagesClient() {
                             onChange={(e) => onSearch(e.target.value)}
                         />
                     </div>
-                    <button
-                        type="button"
-                        onClick={openCompose}
-                        style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600 }}
-                    >
-                        New message
-                    </button>
+                    <div className="header-actions-primary">
+                        <button
+                            type="button"
+                            onClick={openCompose}
+                            style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600 }}
+                        >
+                            New message
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
@@ -804,12 +829,12 @@ export default function MessagesClient() {
                                         >
                                             {isOwner ? (
                                                 <div className="msg-card-actions">
-                                                    <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(52, 211, 153, 0.1)", color: ACCENT, marginBottom: 0, border: "1px solid rgba(52, 211, 153, 0.15)" }} onClick={() => openEdit(m.id)}>
-                                                        <i className="fa-solid fa-pen"></i>
-                                                    </button>
-                                                    <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239,68,68,0.1)", color: "#ef4444", marginBottom: 0 }} onClick={() => deleteMessage(m.id)}>
-                                                        <i className="fa-solid fa-trash"></i>
-                                                    </button>
+                                                    <ItemMenu
+                                                        items={[
+                                                            { label: "Edit", onClick: () => openEdit(m.id) },
+                                                            { label: "Delete", onClick: () => deleteMessage(m.id), danger: true },
+                                                        ]}
+                                                    />
                                                 </div>
                                             ) : null}
                                             <div className={`msg-card-body ${bodyClass}`} dangerouslySetInnerHTML={{ __html: bodyHtml }} />

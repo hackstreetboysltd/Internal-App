@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { approve, get, reject, save } from "@/lib/portalApi";
+import { nextPortalId } from "@/lib/portalTime";
+import { approve, get, reject, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 
 const ITEMS_PER_PAGE = 5;
-const LEADERBOARD_ITEMS_PER_PAGE = 5;
 
 function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 const ICON_BTN = {
@@ -125,13 +126,10 @@ export default function SkillsClient() {
     const [skills, setSkills] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
-    const [lbPage, setLbPage] = useState(1);
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [shareOpen, setShareOpen] = useState(false);
     const [shareShown, setShareShown] = useState(false);
-    const [lbOpen, setLbOpen] = useState(false);
-    const [lbShown, setLbShown] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailShown, setDetailShown] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
@@ -170,9 +168,19 @@ export default function SkillsClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(() => { loadSkills(); }, 0);
-        return () => clearTimeout(t);
-    }, [loadSkills]);
+        setLoading(true);
+        const unsub = watch("skills", (list) => {
+            setSkills(Array.isArray(list) ? list : []);
+            setLoading(false);
+        }, {
+            onError: (e) => {
+                console.error("Error fetching skills:", e);
+                setSkills([]);
+                setLoading(false);
+            },
+        });
+        return unsub;
+    }, []);
 
     const saveSkills = async (list) => {
         try {
@@ -210,18 +218,6 @@ export default function SkillsClient() {
     const startIdx = (page - 1) * ITEMS_PER_PAGE;
     const endIdx = startIdx + ITEMS_PER_PAGE;
     const paginatedSkills = filteredSkills.slice(startIdx, endIdx);
-
-    const ranking = useMemo(() => {
-        const counts = {};
-        skills.forEach((s) => { counts[s.author] = (counts[s.author] || 0) + 1; });
-        return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    }, [skills]);
-    const totalLbCount = ranking.length;
-    const maxLbPage = Math.max(1, Math.ceil(totalLbCount / LEADERBOARD_ITEMS_PER_PAGE));
-    const lb = lbPage > maxLbPage ? maxLbPage : lbPage;
-    const lbStartIdx = (lb - 1) * LEADERBOARD_ITEMS_PER_PAGE;
-    const lbEndIdx = lbStartIdx + LEADERBOARD_ITEMS_PER_PAGE;
-    const paginatedLb = ranking.slice(lbStartIdx, lbEndIdx);
 
     const viewing = skills.find((item) => item.id === viewingSkillId);
 
@@ -402,17 +398,16 @@ export default function SkillsClient() {
                         <input
                             type="text"
                             id="searchSkills"
-                            placeholder="Enter keyword..."
+                            placeholder="Search keyword..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button type="button" onClick={() => openModal(setLbOpen, setLbShown)} style={ACCENT_BTN} title="View Contributors">
-                        <i className="fa-solid fa-trophy"></i>
-                    </button>
-                    <button type="button" onClick={() => openModal(setShareOpen, setShareShown)} style={ACCENT_BTN}>
-                        Share Skill
-                    </button>
+                    <div className="header-actions-primary">
+                        <button type="button" onClick={() => openModal(setShareOpen, setShareShown)} style={ACCENT_BTN}>
+                            Share Skill
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
@@ -457,12 +452,12 @@ export default function SkillsClient() {
                                                         </div>
                                                     ) : !isAdminView && isOwner ? (
                                                         <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                                                            <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(251, 191, 36, 0.1)", color: "#fbbf24", marginBottom: 0, border: "1px solid rgba(251, 191, 36, 0.15)" }} onClick={() => openEdit(s.id)}>
-                                                                <i className="fa-solid fa-pen"></i>
-                                                            </button>
-                                                            <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239,68,68,0.1)", color: "#ef4444", marginBottom: 0 }} onClick={() => deleteSkill(s.id)}>
-                                                                <i className="fa-solid fa-trash"></i>
-                                                            </button>
+                                                            <ItemMenu
+                                                                items={[
+                                                                    { label: "Edit", onClick: () => openEdit(s.id) },
+                                                                    { label: "Delete", onClick: () => deleteSkill(s.id), danger: true },
+                                                                ]}
+                                                            />
                                                         </div>
                                                     ) : null}
                                                 </div>
@@ -483,44 +478,6 @@ export default function SkillsClient() {
                     </div>
                 )}
             </div>
-
-            <ModuleModal open={lbOpen} shown={lbShown} onBackdrop={() => closeModal(setLbOpen, setLbShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: "#fbbf24" }}> Top Contributors</h3>
-                        <span className="close-btn" onClick={() => closeModal(setLbOpen, setLbShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <div id="skillsLeaderboard" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {totalLbCount === 0 ? (
-                                <p style={{ fontSize: "0.85rem", color: "#6b7280", fontStyle: "italic", margin: 0, textAlign: "center", width: "100%" }}>No contributor publications logged yet.</p>
-                            ) : (
-                                paginatedLb.map(([user, val], relativeIdx) => {
-                                    const absoluteIdx = lbStartIdx + relativeIdx;
-                                    return (
-                                        <div key={user} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "rgba(0,0,0,0.15)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.03)" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                {absoluteIdx > 2 ? (
-                                                    <span style={{ color: "#6b7280", fontWeight: "bold", fontSize: "0.85rem", width: 16, textAlign: "center", display: "inline-block" }}>{absoluteIdx + 1}</span>
-                                                ) : null}
-                                                <strong style={{ color: "white", fontSize: "0.9rem" }}>{user}</strong>
-                                            </div>
-                                            <div style={{ fontSize: "0.8rem", color: "#9ca3af", fontWeight: 600 }}>
-                                                {val} skill{val > 1 ? "s" : ""}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                        {totalLbCount > 0 ? (
-                            <div id="leaderboardPagination" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 20, fontSize: "0.85rem", color: "#9ca3af", fontWeight: 500 }}>
-                                <Pager start={lbStartIdx + 1} end={Math.min(lbEndIdx, totalLbCount)} total={totalLbCount} page={lb} onPage={(d) => setLbPage(lb + d)} />
-                            </div>
-                        ) : null}
-                    </div>
-                </div>
-            </ModuleModal>
 
             <ModuleModal open={detailOpen} shown={detailShown} onBackdrop={() => closeModal(setDetailOpen, setDetailShown, () => setViewingSkillId(null))}>
                 <div className="modal-content">
@@ -606,7 +563,7 @@ export default function SkillsClient() {
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#fbbf24", marginTop: 3, flexShrink: 0 }}></i><span>Share a new skill guide with title and detailed guidance.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#fbbf24", marginTop: 3, flexShrink: 0 }}></i><span>Search skills by title, content, or contributor name.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#fbbf24", marginTop: 3, flexShrink: 0 }}></i><span>Click a skill card to view its full guidance details.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#fbbf24", marginTop: 3, flexShrink: 0 }}></i><span>View the Top Contributors leaderboard; edit or delete entries.</span></li>
+                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#fbbf24", marginTop: 3, flexShrink: 0 }}></i><span>Edit or delete your own skill entries from the card menu.</span></li>
                             </ul>
                         </div>
                     </div>

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { get, save } from "@/lib/portalApi";
+import { get, save, watch } from "@/lib/portalApi";
 import { sendApprovalEmailToUser } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 
 const AVATAR_IMG_STYLE = {
     width: "100%",
@@ -257,7 +258,18 @@ export default function ProfileClient() {
     useEffect(() => {
         if (!session?.email) return undefined;
         const t = setTimeout(() => { loadProfiles(); }, 0);
-        return () => clearTimeout(t);
+        const u1 = watch("profile", (profiles) => {
+            if (Array.isArray(profiles)) setAllProfiles(profiles);
+        });
+        const u2 = watch("role_access", (raData) => {
+            const allowedRec = Array.isArray(raData) ? raData.find((r) => r.id === "allowed") : null;
+            setAllowedEmails(allowedRec ? allowedRec.emails || [] : []);
+        });
+        return () => {
+            clearTimeout(t);
+            u1();
+            u2();
+        };
     }, [session?.email, loadProfiles]);
 
     const filteredTeammates = useMemo(() => {
@@ -571,40 +583,44 @@ export default function ProfileClient() {
                         <input
                             type="text"
                             id="searchTeammates"
-                            placeholder="Enter keyword..."
+                            placeholder="Search keyword..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    {isAdminView ? (
+                    <div className="header-actions-tools">
                         <button
                             type="button"
-                            title="Add a teammate manually"
-                            onClick={openAdd}
-                            style={{ width: "auto", padding: "10px 16px", fontSize: "0.88rem", whiteSpace: "nowrap", background: "linear-gradient(135deg, #ff7a00, #ff5100)", boxShadow: "0 4px 12px rgba(255, 122, 0, 0.25)" }}
+                            onClick={openMy}
+                            className="avatar-btn"
+                            id="myProfileButton"
+                            title="My Profile"
+                            style={
+                                hasHttpAvatar(myProfile?.avatar)
+                                    ? { backgroundImage: "none" }
+                                    : { backgroundImage: "none", fontSize: 14, fontWeight: "bold" }
+                            }
                         >
-                            <i className="fa-solid fa-user-plus"></i> Add Member
+                            {hasHttpAvatar(myProfile?.avatar) ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={myProfile.avatar} alt="" referrerPolicy="no-referrer" style={AVATAR_IMG_STYLE} />
+                            ) : (
+                                initialsOf(myProfile?.name)
+                            )}
                         </button>
+                    </div>
+                    {isAdminView ? (
+                        <div className="header-actions-primary">
+                            <button
+                                type="button"
+                                title="Add a teammate manually"
+                                onClick={openAdd}
+                                style={{ width: "auto", padding: "10px 16px", fontSize: "0.88rem", whiteSpace: "nowrap", background: "linear-gradient(135deg, #ff7a00, #ff5100)", boxShadow: "0 4px 12px rgba(255, 122, 0, 0.25)" }}
+                            >
+                                <i className="fa-solid fa-user-plus"></i> Add Member
+                            </button>
+                        </div>
                     ) : null}
-                    <button
-                        type="button"
-                        onClick={openMy}
-                        className="avatar-btn"
-                        id="myProfileButton"
-                        title="My Profile"
-                        style={
-                            hasHttpAvatar(myProfile?.avatar)
-                                ? { backgroundImage: "none" }
-                                : { backgroundImage: "none", fontSize: 14, fontWeight: "bold" }
-                        }
-                    >
-                        {hasHttpAvatar(myProfile?.avatar) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={myProfile.avatar} alt="" referrerPolicy="no-referrer" style={AVATAR_IMG_STYLE} />
-                        ) : (
-                            initialsOf(myProfile?.name)
-                        )}
-                    </button>
                 </div>
 
                 {loading ? (
@@ -632,7 +648,16 @@ export default function ProfileClient() {
                                         const isAllowed = member.email && normalizedAllowed.includes(member.email.trim().toLowerCase());
                                         const isRejected = member.approvedStatus === "rejected";
                                         return (
-                                            <div className="member-card" key={member.email || member.name}>
+                                            <div className={`member-card${isMe ? " has-menu" : ""}`} key={member.email || member.name}>
+                                                {isMe ? (
+                                                    <div className="member-card-menu">
+                                                        <ItemMenu
+                                                            items={[
+                                                                { label: "Edit profile", onClick: openEdit },
+                                                            ]}
+                                                        />
+                                                    </div>
+                                                ) : null}
                                                 <div className="member-card-header">
                                                     <AvatarFace src={member.avatar} name={member.name} className="member-avatar" />
                                                     <div className="member-info">
@@ -743,21 +768,28 @@ export default function ProfileClient() {
                         <span className="close-btn" onClick={() => closeEdit(true)}>&times;</span>
                     </div>
                     <div className="modal-body">
-                        <label className="required" htmlFor="editName">Full Name</label>
-                        <input type="text" id="editName" placeholder="e.g. Jane Doe" required value={editName} onChange={(e) => setEditName(e.target.value)} />
-
-                        <label htmlFor="editEmail">Email Address (Locked)</label>
-                        <input type="email" id="editEmail" className="readonly-input" readOnly value={editEmail} />
-
-                        <label htmlFor="editRole">Designated Role</label>
-                        <input type="text" id="editRole" placeholder="e.g. Lead Security Architect" value={editRole} onChange={(e) => setEditRole(e.target.value)} />
-
-                        <label htmlFor="editDept">Department</label>
-                        <input type="text" id="editDept" placeholder="e.g. Platform Engineering" value={editDept} onChange={(e) => setEditDept(e.target.value)} />
-
-                        <label htmlFor="editBio">Professional Bio</label>
-                        <textarea id="editBio" placeholder="Tell the team about yourself, skills, or what you work on..." value={editBio} onChange={(e) => setEditBio(e.target.value)}></textarea>
-
+                        <div className="profile-form-grid">
+                            <div className="profile-field">
+                                <label className="required" htmlFor="editName">Full Name</label>
+                                <input type="text" id="editName" placeholder="e.g. Jane Doe" required value={editName} onChange={(e) => setEditName(e.target.value)} />
+                            </div>
+                            <div className="profile-field">
+                                <label htmlFor="editEmail">Email Address</label>
+                                <input type="email" id="editEmail" className="readonly-input" readOnly value={editEmail} />
+                            </div>
+                            <div className="profile-field">
+                                <label htmlFor="editRole">Designated Role</label>
+                                <input type="text" id="editRole" placeholder="e.g. Lead Security Architect" value={editRole} onChange={(e) => setEditRole(e.target.value)} />
+                            </div>
+                            <div className="profile-field">
+                                <label htmlFor="editDept">Department</label>
+                                <input type="text" id="editDept" placeholder="e.g. Platform Engineering" value={editDept} onChange={(e) => setEditDept(e.target.value)} />
+                            </div>
+                            <div className="profile-field full">
+                                <label htmlFor="editBio">Professional Bio</label>
+                                <textarea id="editBio" placeholder="Tell the team about yourself, skills, or what you work on..." value={editBio} onChange={(e) => setEditBio(e.target.value)}></textarea>
+                            </div>
+                        </div>
                         <button type="submit" style={{ marginTop: 16 }}> Save Profile</button>
                     </div>
                 </form>

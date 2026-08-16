@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { signState } from "@/lib/server/signState";
+import { realNowUnix } from "@/lib/server/realTime";
 import { withApi } from "@/lib/server/withApi";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ async function handler(request) {
     returnTo,
     sessionId,
     nonce: randomUUID(),
-    exp: Math.floor(Date.now() / 1000) + 600,
+    exp: realNowUnix() + 600,
   });
 
   const params = new URLSearchParams({

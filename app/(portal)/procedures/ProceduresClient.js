@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { approve, get, reject, save } from "@/lib/portalApi";
+import { nextPortalId } from "@/lib/portalTime";
+import { approve, get, reject, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import ItemMenu from "@/components/ItemMenu";
 
 const ITEMS_PER_PAGE = 5;
 const LEADERBOARD_ITEMS_PER_PAGE = 5;
 const ACCENT = "#a78bfa";
 
 function nextItemId() {
-    return Date.now();
+    return nextPortalId();
 }
 
 function stepsText(steps) {
@@ -276,9 +278,19 @@ export default function ProceduresClient() {
     }, []);
 
     useEffect(() => {
-        const t = setTimeout(() => { loadProcedures(); }, 0);
-        return () => clearTimeout(t);
-    }, [loadProcedures]);
+        setLoading(true);
+        const unsub = watch("procedures", (list) => {
+            setProcedures(Array.isArray(list) ? list : []);
+            setLoading(false);
+        }, {
+            onError: (e) => {
+                console.error("Error fetching procedures:", e);
+                setProcedures([]);
+                setLoading(false);
+            },
+        });
+        return unsub;
+    }, []);
 
     const saveProcedures = async (list) => {
         try {
@@ -509,17 +521,21 @@ export default function ProceduresClient() {
                         <input
                             type="text"
                             id="searchProcedures"
-                            placeholder="Enter keyword..."
+                            placeholder="Search keyword..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button type="button" onClick={() => openModal(setLbOpen, setLbShown)} style={ACCENT_BTN} title="View Contributors">
-                        <i className="fa-solid fa-trophy"></i>
-                    </button>
-                    <button type="button" onClick={() => { setShareSteps([]); openModal(setShareOpen, setShareShown); }} style={ACCENT_BTN}>
-                        Publish Guide
-                    </button>
+                    <div className="header-actions-tools">
+                        <button type="button" className="header-actions-icon-btn" onClick={() => openModal(setLbOpen, setLbShown)} style={ACCENT_BTN} title="View Contributors">
+                            <i className="fa-solid fa-trophy"></i>
+                        </button>
+                    </div>
+                    <div className="header-actions-primary">
+                        <button type="button" onClick={() => { setShareSteps([]); openModal(setShareOpen, setShareShown); }} style={ACCENT_BTN}>
+                            Publish Guide
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
@@ -566,12 +582,12 @@ export default function ProceduresClient() {
                                                         </div>
                                                     ) : !isAdminView && isOwner ? (
                                                         <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                                                            <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(167, 139, 250, 0.1)", color: ACCENT, marginBottom: 0, border: "1px solid rgba(167, 139, 250, 0.15)" }} onClick={() => openEdit(p.id)}>
-                                                                <i className="fa-solid fa-pen"></i>
-                                                            </button>
-                                                            <button type="button" className="secondary-btn" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239,68,68,0.1)", color: "#ef4444", marginBottom: 0 }} onClick={() => deleteProcedure(p.id)}>
-                                                                <i className="fa-solid fa-trash"></i>
-                                                            </button>
+                                                            <ItemMenu
+                                                                items={[
+                                                                    { label: "Edit", onClick: () => openEdit(p.id) },
+                                                                    { label: "Delete", onClick: () => deleteProcedure(p.id), danger: true },
+                                                                ]}
+                                                            />
                                                         </div>
                                                     ) : null}
                                                 </div>

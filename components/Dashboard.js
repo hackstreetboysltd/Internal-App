@@ -1,36 +1,23 @@
 'use client';
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session";
 import { pathForModule, displayNameForModule } from "@/lib/modules";
 import { saveActiveModule } from "@/lib/session";
 
-function greetingText() {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 18) return "Good Afternoon, Team";
-    return "Good Evening";
-}
-
 const CARDS = [
-    { key: "apps", title: "Apps", iconWrap: "apps-color", icon: "fa-solid fa-layer-group" },
-    { key: "messages", title: "Messages", iconWrap: "messages-color", icon: "fa-solid fa-comments", cardId: "dashMessagesCard" },
-    { key: "calendar", title: "Calendar", iconWrap: "calendar-color", icon: "fa-regular fa-calendar" },
-    { key: "goals", title: "Goals", iconWrap: "goals-color", icon: "fa-solid fa-bullseye" },
-    { key: "skills", title: "Skills", iconWrap: "skills-color", icon: "fa-solid fa-brain" },
-    { key: "procedures", title: "Procedures", iconWrap: "procedures-color", icon: "fa-solid fa-list-check" },
+    { key: "apps", title: "Apps", icon: "fa-solid fa-layer-group" },
+    { key: "messages", title: "Messages", icon: "fa-solid fa-comments", cardId: "dashMessagesCard" },
+    { key: "calendar", title: "Calendar", icon: "fa-regular fa-calendar" },
+    { key: "goals", title: "Goals", icon: "fa-solid fa-bullseye" },
+    { key: "skills", title: "Skills", icon: "fa-solid fa-brain" },
+    { key: "procedures", title: "Procedures", icon: "fa-solid fa-list-check" },
+    { key: "documents", title: "Documents", icon: "fa-solid fa-file-lines" },
 ];
 
 export default function Dashboard() {
     const router = useRouter();
     const { isAdminView } = useSession();
-    const [greeting, setGreeting] = useState("Welcome Back, Team");
-
-    useEffect(() => {
-        const t = setTimeout(() => setGreeting(greetingText()), 0);
-        return () => clearTimeout(t);
-    }, []);
 
     const open = (key) => {
         const name = displayNameForModule(key, isAdminView);
@@ -40,27 +27,26 @@ export default function Dashboard() {
 
     return (
         <div id="welcomeScreen" className="welcome-screen">
-            <div className="welcome-header">
-                <h1 id="greeting">{greeting}</h1>
-            </div>
             <div className="dashboard-grid">
                 {CARDS.map((card) => {
                     const isMessages = card.key === "messages";
                     const title = isMessages && isAdminView ? "Role Access" : card.title;
-                    const iconWrap = isMessages && isAdminView ? "role-access-color" : card.iconWrap;
                     const icon = isMessages && isAdminView ? "fa-solid fa-user-lock" : card.icon;
+                    const tone = isMessages && isAdminView ? "role-access" : card.key;
                     return (
-                        <div
+                        <button
                             key={card.key}
-                            className="dash-card"
+                            type="button"
+                            className="mod-tile"
                             id={card.cardId}
+                            data-tone={tone}
                             onClick={() => open(card.key)}
                         >
-                            <div className={`card-icon ${iconWrap}`}><i className={icon}></i></div>
-                            <div className="card-info">
-                                <span className="card-title">{title}</span>
-                            </div>
-                        </div>
+                            <span className="mod-tile-icon" aria-hidden="true">
+                                <i className={icon}></i>
+                            </span>
+                            <span className="mod-tile-name">{title}</span>
+                        </button>
                     );
                 })}
             </div>

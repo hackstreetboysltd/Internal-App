@@ -94,6 +94,36 @@ async function main() {
   }
   console.log("GET goals seed OK, count:", goals.length);
 
+  const victim = goals.find((g) => g.user && String(g.user).toLowerCase() !== "phase 3 tester") || {
+    id: "p3-foreign-goal",
+    user: "Someone Else",
+    email: "other@example.com",
+    goals: [{ text: "secret", done: false }],
+  };
+  await pool.query(
+    `INSERT INTO collection_items (collection_name, id, data, author_email)
+     VALUES ('goals', $1, $2::jsonb, $3)
+     ON CONFLICT (collection_name, id) DO UPDATE SET data = EXCLUDED.data, deleted_at = NULL`,
+    [String(victim.id), JSON.stringify(victim), victim.email || "other@example.com"],
+  );
+
+  const escalated = goals.map((g) =>
+    String(g.id) === String(victim.id) ? { ...g, goals: [{ text: "hacked", done: true }] } : g,
+  );
+  if (!escalated.some((g) => String(g.id) === String(victim.id))) {
+    escalated.push({ ...victim, goals: [{ text: "hacked", done: true }] });
+  }
+
+  const escalateRes = await fetch(`${BASE}/api/data/goals/?admin=1`, {
+    method: "PUT",
+    headers: { Cookie: `sid=${sid}`, "Content-Type": "application/json" },
+    body: JSON.stringify(escalated),
+  });
+  if (escalateRes.status !== 403) {
+    throw new Error(`Expected 403 for non-admin ?admin=1 goals write, got ${escalateRes.status} ${await escalateRes.text()}`);
+  }
+  console.log("non-admin ?admin=1 cannot skip goals owner guard → 403");
+
   const noAuth = await fetch(`${BASE}/api/data/settings/`);
   if (noAuth.status !== 401) {
     throw new Error(`Expected 401 without session, got ${noAuth.status}`);
