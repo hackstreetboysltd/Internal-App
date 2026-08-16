@@ -27,12 +27,6 @@ const ICON_BTN = {
     transition: "opacity 0.2s, transform 0.2s",
 };
 
-const NEW_APP_BTN = {
-    width: "auto",
-    padding: "10px 18px",
-    fontSize: "0.9rem",
-};
-
 function IconBtn({ title, onClick, className, style, hoverScale = 1.1, children }) {
     return (
         <button
@@ -351,8 +345,8 @@ export default function AppsClient() {
                     </div>
                 </div>
 
-                <div className="header-actions" style={{ marginBottom: 24, display: "flex", gap: 16, alignItems: "center" }}>
-                    <div className="search-input-wrapper" style={{ flex: 1 }}>
+                <div className="header-actions" style={{ marginBottom: 24 }}>
+                    <div className="search-input-wrapper">
                         <input
                             type="text"
                             id="searchApps"
@@ -361,7 +355,7 @@ export default function AppsClient() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button type="button" onClick={openRegister} style={NEW_APP_BTN}>
+                    <button type="button" className="new-app-btn" onClick={openRegister}>
                         New App
                     </button>
                 </div>
@@ -392,8 +386,8 @@ export default function AppsClient() {
                                                 router.push(`/apps/detail/?id=${app.id}`);
                                             }}
                                         >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 0 }}>
-                                                <h4 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                                            <div className="app-card-top">
+                                                <h4 title={app.name}>
                                                     {app.name}
                                                     {isAdminView && app.pendingType ? (
                                                         <span
@@ -412,7 +406,7 @@ export default function AppsClient() {
                                                     ) : null}
                                                 </h4>
                                                 {isAdminView && app.pendingId ? (
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                                                    <div className="app-card-actions" onClick={(e) => e.stopPropagation()}>
                                                         <button
                                                             type="button"
                                                             className="secondary-btn"
@@ -431,7 +425,7 @@ export default function AppsClient() {
                                                         </button>
                                                     </div>
                                                 ) : !isAdminView && isOwner ? (
-                                                    <div onClick={(e) => e.stopPropagation()}>
+                                                    <div className="app-card-actions" onClick={(e) => e.stopPropagation()}>
                                                         <button
                                                             type="button"
                                                             className="secondary-btn"
@@ -451,7 +445,7 @@ export default function AppsClient() {
                                                     </div>
                                                 ) : null}
                                             </div>
-                                            <p style={{ marginBottom: 16, color: "#cbd5e1", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis", minHeight: "4.5em" }}>
+                                            <p className="app-card-desc">
                                                 {stripHtml(app.desc)}
                                             </p>
                                         </div>

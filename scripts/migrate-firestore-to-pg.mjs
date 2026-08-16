@@ -2,21 +2,46 @@
  * One-time Firestore → PostgreSQL migration.
  *
  * Usage:
- *   node scripts/migrate-firestore-to-pg.mjs --from-export=./firestore-export.json
  *   node scripts/migrate-firestore-to-pg.mjs --live
- *   node scripts/migrate-firestore-to-pg.mjs --from-export=./export.json --dry-run
- *   node scripts/migrate-firestore-to-pg.mjs --from-export=./export.json --collection=profile
+ *   node scripts/migrate-firestore-to-pg.mjs --from-export=./firestore-export.json
+ *   node scripts/migrate-firestore-to-pg.mjs --live --dry-run
  *
- * Live mode requires firebase-admin and one of:
- *   FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
- *   FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
- *   GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json
+ * Live mode prefers firebase-admin (service account). If none is set, it falls
+ * back to the Firebase client SDK using NEXT_PUBLIC_FIREBASE_* from .env.local
+ * (same access the old static portal used).
+ *
+ * Destination: NEON_DATABASE_URL, else DATABASE_URL.
+ * Neon hosts use the HTTPS driver (TCP 5432 is often blocked locally).
  */
+import { readFileSync } from "fs";
 import { readFile } from "fs/promises";
+import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import pg from "pg";
+import { neon } from "@neondatabase/serverless";
 
-const DATABASE_URL = process.env.DATABASE_URL || "postgresql://portal:portal@localhost:5432/portal";
+function loadEnvFile(path) {
+  try {
+    const text = readFileSync(path, "utf8");
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#") || !line.includes("=")) continue;
+      const eq = line.indexOf("=");
+      const key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (key && process.env[key] == null) process.env[key] = val;
+    }
+  } catch {
+    /* optional */
+  }
+}
+
+loadEnvFile(fileURLToPath(new URL("../.env.local", import.meta.url)));
+loadEnvFile(fileURLToPath(new URL("../.env.neon", import.meta.url)));
+loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
 
 export const MIGRATABLE_COLLECTIONS = [
   "skills",
@@ -39,6 +64,26 @@ export const MIGRATABLE_COLLECTIONS = [
   "pending_profile",
   "role_access",
 ];
+
+function cleanUrl(url) {
+  return url.replace(/&?channel_binding=require/g, "").replace(/\?&/, "?").replace(/\?$/, "");
+}
+
+function destUrl() {
+  return process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "postgresql://portal:portal@localhost:5432/portal";
+}
+
+function isNeon(url) {
+  return /neon\.tech/i.test(url);
+}
+
+function pgValue(val) {
+  if (val == null) return val;
+  if (Array.isArray(val) || (typeof val === "object" && !(val instanceof Date))) {
+    return JSON.stringify(val);
+  }
+  return val;
+}
 
 function parseArgs(argv) {
   const options = {
@@ -72,10 +117,26 @@ export async function loadExportFile(path) {
   return parsed;
 }
 
+function hasServiceAccount() {
+  return !!(
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+    || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    || process.env.GOOGLE_APPLICATION_CREDENTIALS
+  );
+}
+
 /**
  * @returns {Promise<Record<string, unknown[]>>}
  */
 export async function loadFromFirestoreLive() {
+  if (hasServiceAccount()) {
+    return loadFromFirestoreAdmin();
+  }
+  console.log("No service account — reading Firestore with client SDK (NEXT_PUBLIC_FIREBASE_*).");
+  return loadFromFirestoreClient();
+}
+
+async function loadFromFirestoreAdmin() {
   let admin;
   try {
     admin = await import("firebase-admin");
@@ -105,12 +166,45 @@ export async function loadFromFirestoreLive() {
   const db = admin.firestore();
   /** @type {Record<string, unknown[]>} */
   const data = {};
-
+  const snap = await db.collection("modules").get();
+  for (const docSnap of snap.docs) {
+    data[docSnap.id] = docSnap.data()?.data || [];
+  }
   for (const name of MIGRATABLE_COLLECTIONS) {
-    const snap = await db.collection("modules").doc(name).get();
-    data[name] = snap.exists ? (snap.data()?.data || []) : [];
+    if (!(name in data)) data[name] = [];
+  }
+  return data;
+}
+
+async function loadFromFirestoreClient() {
+  const { initializeApp, getApps } = await import("firebase/app");
+  const { getFirestore, collection, getDocs } = await import("firebase/firestore");
+
+  const config = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || "",
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "",
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || "",
+  };
+
+  if (!config.apiKey || !config.projectId) {
+    throw new Error("NEXT_PUBLIC_FIREBASE_API_KEY / PROJECT_ID missing from .env.local");
   }
 
+  const app = getApps().length ? getApps()[0] : initializeApp(config);
+  const db = getFirestore(app);
+  const snap = await getDocs(collection(db, "modules"));
+
+  /** @type {Record<string, unknown[]>} */
+  const data = {};
+  snap.forEach((docSnap) => {
+    data[docSnap.id] = docSnap.data()?.data || [];
+  });
+  for (const name of MIGRATABLE_COLLECTIONS) {
+    if (!(name in data)) data[name] = [];
+  }
   return data;
 }
 
@@ -122,26 +216,53 @@ function normalizeItems(items) {
   return items.filter((item) => item && typeof item === "object");
 }
 
+function createDest(url) {
+  const cleaned = cleanUrl(url);
+  if (isNeon(cleaned)) {
+    const sql = neon(cleaned, { fullResults: true });
+    return {
+      kind: "neon",
+      async query(text, params = []) {
+        const result = await sql.query(text, params);
+        return { rows: result.rows || [] };
+      },
+      async end() {},
+    };
+  }
+
+  const pool = new pg.Pool({
+    connectionString: cleaned,
+    ssl: /sslmode=require|neon\.tech|supabase\.co/i.test(cleaned)
+      ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "0" }
+      : undefined,
+  });
+  return {
+    kind: "pg",
+    query: (text, params) => pool.query(text, params),
+    end: () => pool.end(),
+  };
+}
+
 /**
- * @param {import('pg').PoolClient} client
+ * @param {{ query: Function }} dest
  * @param {string} collectionName
  * @param {unknown[]} items
  * @param {boolean} dryRun
  */
-async function writeCollectionItems(client, collectionName, items, dryRun) {
+async function writeCollectionItems(dest, collectionName, items, dryRun) {
   const list = normalizeItems(items);
 
   if (collectionName === "role_access") {
     if (dryRun) return list.length;
     for (const item of list) {
       if (!item.id) continue;
-      await client.query(
+      await dest.query(
         `INSERT INTO role_access (id, emails, updated_at)
          VALUES ($1, $2::jsonb, now())
          ON CONFLICT (id) DO UPDATE SET
            emails = EXCLUDED.emails,
            updated_at = now()`,
-        [item.id, JSON.stringify(item.emails || [])],
+        [item.id, pgValue(item.emails || [])],
       );
     }
     return list.length;
@@ -149,72 +270,64 @@ async function writeCollectionItems(client, collectionName, items, dryRun) {
 
   if (dryRun) return list.length;
 
-  await client.query("DELETE FROM collection_items WHERE collection_name = $1", [collectionName]);
+  await dest.query("DELETE FROM collection_items WHERE collection_name = $1", [collectionName]);
 
   for (const item of list) {
     const rowId = String(item.id ?? item.email ?? Date.now());
     const authorEmail = item.author_email || item.authorEmail || null;
-    await client.query(
+    await dest.query(
       `INSERT INTO collection_items (collection_name, id, data, author_email, updated_at)
        VALUES ($1, $2, $3::jsonb, $4, now())`,
-      [collectionName, rowId, JSON.stringify(item), authorEmail],
+      [collectionName, rowId, pgValue(item), authorEmail],
     );
   }
 
   return list.length;
 }
 
+function collectionNamesFrom(data, only) {
+  if (only) return [only];
+  const extras = Object.keys(data).filter((name) => !MIGRATABLE_COLLECTIONS.includes(name));
+  return [...MIGRATABLE_COLLECTIONS, ...extras];
+}
+
 /**
- * @param {import('pg').Pool} pool
+ * @param {{ query: Function }} dest
  * @param {Record<string, unknown[]>} data
  * @param {{ dryRun?: boolean, collection?: string | null }} [options]
  */
-export async function migrateFirestoreData(pool, data, options = {}) {
+export async function migrateFirestoreData(dest, data, options = {}) {
   const { dryRun = false, collection = null } = options;
-  const names = collection ? [collection] : MIGRATABLE_COLLECTIONS;
+  const names = collectionNamesFrom(data, collection);
   /** @type {Record<string, number>} */
   const written = {};
 
-  const client = await pool.connect();
-  try {
-    if (!dryRun) await client.query("BEGIN");
-
-    for (const name of names) {
-      if (!MIGRATABLE_COLLECTIONS.includes(name)) {
-        throw new Error(`Unknown collection: ${name}`);
-      }
-      const items = data[name] || [];
-      written[name] = await writeCollectionItems(client, name, items, dryRun);
-    }
-
-    if (!dryRun) await client.query("COMMIT");
-  } catch (err) {
-    if (!dryRun) await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+  for (const name of names) {
+    const items = data[name] || [];
+    written[name] = await writeCollectionItems(dest, name, items, dryRun);
   }
 
   return written;
 }
 
 /**
- * @param {import('pg').Pool} pool
+ * @param {{ query: Function }} dest
  * @param {Record<string, unknown[]>} source
  */
-export async function verifyMigrationCounts(pool, source) {
+export async function verifyMigrationCounts(dest, source) {
   /** @type {Record<string, { source: number, postgres: number, ok: boolean }>} */
   const report = {};
+  const names = collectionNamesFrom(source, null);
 
-  for (const name of MIGRATABLE_COLLECTIONS) {
+  for (const name of names) {
     const sourceCount = normalizeItems(source[name] || []).length;
     let postgresCount = 0;
 
     if (name === "role_access") {
-      const res = await pool.query(`SELECT COUNT(*)::int AS n FROM role_access`);
+      const res = await dest.query(`SELECT COUNT(*)::int AS n FROM role_access`);
       postgresCount = res.rows[0]?.n || 0;
     } else {
-      const res = await pool.query(
+      const res = await dest.query(
         `SELECT COUNT(*)::int AS n FROM collection_items WHERE collection_name = $1 AND deleted_at IS NULL`,
         [name],
       );
@@ -250,18 +363,22 @@ async function main() {
     data = await loadFromFirestoreLive();
   }
 
-  const pool = new pg.Pool({ connectionString: DATABASE_URL });
+  const url = destUrl();
+  const destKind = isNeon(url) ? "neon-http" : "postgres";
+  console.log(`Writing to ${destKind}`);
+
+  const dest = createDest(url);
 
   try {
     if (options.verifyOnly) {
-      const report = await verifyMigrationCounts(pool, data);
+      const report = await verifyMigrationCounts(dest, data);
       printReport(report);
       const failed = Object.values(report).filter((r) => !r.ok);
       if (failed.length) process.exitCode = 1;
       return;
     }
 
-    const written = await migrateFirestoreData(pool, data, {
+    const written = await migrateFirestoreData(dest, data, {
       dryRun: options.dryRun,
       collection: options.collection,
     });
@@ -272,7 +389,7 @@ async function main() {
     }
 
     if (!options.dryRun) {
-      const report = await verifyMigrationCounts(pool, data);
+      const report = await verifyMigrationCounts(dest, data);
       printReport(report);
       const failed = Object.values(report).filter((r) => !r.ok);
       if (failed.length) {
@@ -283,7 +400,7 @@ async function main() {
       }
     }
   } finally {
-    await pool.end();
+    await dest.end();
   }
 }
 
@@ -300,8 +417,12 @@ function printReport(report) {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  main().catch((err) => {
-    console.error("Migration failed:", err.message);
-    process.exitCode = 1;
-  });
+  main()
+    .catch((err) => {
+      console.error("Migration failed:", err.message);
+      process.exitCode = 1;
+    })
+    .finally(() => {
+      process.exit(process.exitCode || 0);
+    });
 }

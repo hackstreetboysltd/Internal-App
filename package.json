@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--dns-result-order=ipv4first --no-network-family-autoselection' next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_OPTIONS='--dns-result-order=ipv4first --no-network-family-autoselection' next start",
     "lint": "eslint",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
@@ -14,6 +14,7 @@
     "migrate:down": "node-pg-migrate down",
     "migrate:create": "node-pg-migrate create",
     "migrate:firestore": "node scripts/migrate-firestore-to-pg.mjs",
+    "db:copy": "node scripts/copy-pg-between.mjs",
     "jobs:retention": "node scripts/retention.mjs",
     "test:load": "node scripts/load-test.mjs",
     "test:phase2": "node scripts/test-phase2.mjs",
@@ -33,6 +34,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "firebase-admin": "^13.0.2",

@@ -14,7 +14,16 @@ const PUBLIC_PREFIXES = [
 
 function withBasePath(path) {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${BASE_PATH}${normalized}`;
+  return `${BASE_PATH}${normalized === "/" ? "/" : normalized}`;
+}
+
+/** Strip basePath so checks work whether Next includes it in pathname or not. */
+function appPathname(pathname) {
+  if (pathname === BASE_PATH || pathname === `${BASE_PATH}/`) return "/";
+  if (pathname.startsWith(`${BASE_PATH}/`)) {
+    return pathname.slice(BASE_PATH.length) || "/";
+  }
+  return pathname || "/";
 }
 
 function isPublicPath(pathname) {
@@ -26,7 +35,8 @@ function isPublicPath(pathname) {
 }
 
 export function middleware(request) {
-  const { pathname } = request.nextUrl;
+  const rawPath = request.nextUrl.pathname;
+  const pathname = appPathname(rawPath);
   const cookieName = getSessionCookieName();
   const sid = request.cookies.get(cookieName)?.value;
 
@@ -52,5 +62,6 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Explicitly include `/` — some Next matchers skip the bare root path.
+  matcher: ["/", "/((?!_next/static|_next/image|favicon.ico).*)"],
 };

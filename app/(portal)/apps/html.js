@@ -28,12 +28,18 @@ export function sanitizeHtml(html) {
 }
 
 export function stripHtml(html) {
+    const raw = String(html || "");
+    // Insert spaces around block-ish tags so adjacent paragraphs don't glue together.
+    const spaced = raw
+        .replace(/<\s*br\s*\/?>/gi, " ")
+        .replace(/<\/\s*(p|div|li|h[1-6])\s*>/gi, " ")
+        .replace(/<\s*(p|div|li|h[1-6])(\s[^>]*)?>/gi, " ");
     if (typeof document === "undefined") {
-        return String(html || "").replace(/<[^>]*>/g, "").trim();
+        return spaced.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     }
     const template = document.createElement("template");
-    template.innerHTML = html || "";
-    return (template.content.textContent || "").trim();
+    template.innerHTML = spaced;
+    return (template.content.textContent || "").replace(/\s+/g, " ").trim();
 }
 
 export function escapeHtml(str) {
