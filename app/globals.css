@@ -377,7 +377,7 @@ iframe {
 /* Dashboard Stats Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     margin-top: 10px;
 }
@@ -604,7 +604,7 @@ body.module-open .active-bar {
     }
 
     .dashboard-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 15px;
     }
 
@@ -675,7 +675,7 @@ body.module-open .active-bar {
     }
 
     .dashboard-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 12px;
     }
 
