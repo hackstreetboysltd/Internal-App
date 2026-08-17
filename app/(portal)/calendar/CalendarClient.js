@@ -6,6 +6,8 @@ import { approve, get, getCollection, reject, save, saveCollection, watch } from
 import { portalDateParts, portalNowIso } from "@/lib/portalTime";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 import {
     MAX_INLINE_FILE_BYTES,
     MONTH_NAMES,
@@ -121,6 +123,7 @@ export default function CalendarClient() {
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const [loading, setLoading] = useState(true);
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const [events, setEvents] = useState([]);
     const [meetings, setMeetings] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -245,7 +248,6 @@ export default function CalendarClient() {
     const saveEvents = async (list) => {
         try {
             await save("calendar", persistableCollection(list));
-            await loadSchedule();
         } catch (e) {
             console.error("Failed database write.", e);
             alert("Failed to save event. Ensure you have an active internet connection.");
@@ -256,7 +258,6 @@ export default function CalendarClient() {
     const saveMeetings = async (list) => {
         try {
             await save("meetings", persistableCollection(list));
-            await loadSchedule();
         } catch (e) {
             console.error("Failed database write.", e);
             alert("Failed to save meetings to physical database server.");
@@ -369,7 +370,7 @@ export default function CalendarClient() {
         openModal(setMeetingOpen, setMeetingShown);
     };
 
-    const addEvent = async () => {
+    const addEvent = () => runFormBusy(async () => {
         const author = evAuthor.trim();
         const title = evTitle.trim();
         const date = evDate;
@@ -395,9 +396,9 @@ export default function CalendarClient() {
         });
         setEvAuthor(""); setEvTitle(""); setEvDate(""); setEvLoc("");
         closeModal(setEventOpen, setEventShown);
-    };
+    });
 
-    const addMeeting = async () => {
+    const addMeeting = () => runFormBusy(async () => {
         const author = mAuthor.trim();
         const time = mTime;
         const link = mLink.trim();
@@ -424,9 +425,9 @@ export default function CalendarClient() {
         });
         setMAuthor(""); setMTime(""); setMLink(""); setMAgenda("");
         closeModal(setMeetingOpen, setMeetingShown);
-    };
+    });
 
-    const saveEditEvent = async () => {
+    const saveEditEvent = () => runFormBusy(async () => {
         const id = parseInt(editEvId, 10);
         const author = editEvAuthor.trim();
         const title = editEvTitle.trim();
@@ -456,9 +457,9 @@ export default function CalendarClient() {
             excludeEmail: current.email,
         });
         closeModal(setEditEventOpen, setEditEventShown);
-    };
+    });
 
-    const saveEditMeeting = async () => {
+    const saveEditMeeting = () => runFormBusy(async () => {
         const id = parseInt(editMId, 10);
         const author = editMAuthor.trim();
         const time = editMTime;
@@ -488,7 +489,7 @@ export default function CalendarClient() {
             excludeEmail: current.email,
         });
         closeModal(setEditMeetingOpen, setEditMeetingShown);
-    };
+    });
 
     const deleteEvent = async (id) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -1118,7 +1119,7 @@ export default function CalendarClient() {
                         <Field id="evTitle" label="Event Name" style={{ marginTop: 14 }}><input type="text" id="evTitle" placeholder="e.g. Q3 All Hands Sync" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="evDate" label="Event Date" style={{ marginTop: 14 }}><input type="date" id="evDate" value={evDate} onChange={(e) => setEvDate(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="evLoc" label="Location / Virtual Link" style={{ marginTop: 14 }}><input type="text" id="evLoc" placeholder="e.g. Google Meet URL or conference room name" value={evLoc} onChange={(e) => setEvLoc(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <button type="button" onClick={addEvent} style={{ marginTop: 20, background: "#f472b6", borderColor: "#f472b6", fontWeight: 600, width: "100%" }}>Add to Calendar</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Adding…" onClick={addEvent} style={{ marginTop: 20, background: "#f472b6", borderColor: "#f472b6", fontWeight: 600, width: "100%" }}>Add to Calendar</BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -1134,7 +1135,7 @@ export default function CalendarClient() {
                         <Field id="mTime" label="Date & Time" style={{ marginTop: 14 }}><input type="datetime-local" id="mTime" value={mTime} onChange={(e) => setMTime(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="mLink" label="Meeting URL" style={{ marginTop: 14 }}><input type="url" id="mLink" placeholder="e.g. https://meet.google.com/abc-defg-hij" value={mLink} onChange={(e) => setMLink(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="mAgenda" label="Meeting Agenda" style={{ marginTop: 14 }}><textarea id="mAgenda" placeholder="Specify key topics and goals..." value={mAgenda} onChange={(e) => setMAgenda(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <button type="button" onClick={addMeeting} style={{ marginTop: 20, background: "#818cf8", borderColor: "#818cf8", color: "white", fontWeight: 600, width: "100%" }}>Schedule Meeting</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Scheduling…" onClick={addMeeting} style={{ marginTop: 20, background: "#818cf8", borderColor: "#818cf8", color: "white", fontWeight: 600, width: "100%" }}>Schedule Meeting</BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -1150,7 +1151,7 @@ export default function CalendarClient() {
                         <Field id="editEvTitle" label="Event Name" style={{ marginTop: 14 }}><input type="text" id="editEvTitle" placeholder="e.g. Q3 All Hands Sync" value={editEvTitle} onChange={(e) => setEditEvTitle(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="editEvDate" label="Event Date" style={{ marginTop: 14 }}><input type="date" id="editEvDate" value={editEvDate} onChange={(e) => setEditEvDate(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="editEvLoc" label="Location / Virtual Link" style={{ marginTop: 14 }}><input type="text" id="editEvLoc" placeholder="e.g. Google Meet URL or conference room name" value={editEvLoc} onChange={(e) => setEditEvLoc(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <button type="button" onClick={saveEditEvent} style={{ marginTop: 20, background: "#f472b6", borderColor: "#f472b6", color: "white", fontWeight: 600, width: "100%" }}>Save Changes</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditEvent} style={{ marginTop: 20, background: "#f472b6", borderColor: "#f472b6", color: "white", fontWeight: 600, width: "100%" }}>Save Changes</BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -1166,7 +1167,7 @@ export default function CalendarClient() {
                         <Field id="editMTime" label="Date & Time" style={{ marginTop: 14 }}><input type="datetime-local" id="editMTime" value={editMTime} onChange={(e) => setEditMTime(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="editMLink" label="Meeting URL" style={{ marginTop: 14 }}><input type="url" id="editMLink" placeholder="e.g. https://meet.google.com/abc-defg-hij" value={editMLink} onChange={(e) => setEditMLink(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
                         <Field id="editMAgenda" label="Meeting Agenda" style={{ marginTop: 14 }}><textarea id="editMAgenda" placeholder="Specify key topics and goals..." value={editMAgenda} onChange={(e) => setEditMAgenda(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <button type="button" onClick={saveEditMeeting} style={{ marginTop: 20, background: "#818cf8", borderColor: "#818cf8", color: "white", fontWeight: 600, width: "100%" }}>Save Changes</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditMeeting} style={{ marginTop: 20, background: "#818cf8", borderColor: "#818cf8", color: "white", fontWeight: 600, width: "100%" }}>Save Changes</BusyButton>
                     </div>
                 </div>
             </ModuleModal>

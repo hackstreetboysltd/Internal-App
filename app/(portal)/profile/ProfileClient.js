@@ -6,6 +6,8 @@ import { get, save, watch } from "@/lib/portalApi";
 import { sendApprovalEmailToUser } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 
 const AVATAR_IMG_STYLE = {
     width: "100%",
@@ -160,6 +162,7 @@ export default function ProfileClient() {
     const [addBio, setAddBio] = useState("");
     const [addNotify, setAddNotify] = useState(true);
     const [addBusy, setAddBusy] = useState(false);
+    const { busy: editBusy, runBusy: runEditBusy } = useBusy();
 
     const timers = useRef([]);
     const later = (fn, ms) => {
@@ -369,8 +372,9 @@ export default function ProfileClient() {
         }
     };
 
-    const saveProfileEdit = async (e) => {
+    const saveProfileEdit = (e) => {
         e.preventDefault();
+        return runEditBusy(async () => {
         const name = editName.trim();
         const role = editRole.trim();
         const dept = editDept.trim();
@@ -396,6 +400,7 @@ export default function ProfileClient() {
 
         setSession({ ...currentUser, name });
         closeEdit(true);
+        });
     };
 
     const refreshProfiles = async () => {
@@ -790,7 +795,7 @@ export default function ProfileClient() {
                                 <textarea id="editBio" placeholder="Tell the team about yourself, skills, or what you work on..." value={editBio} onChange={(e) => setEditBio(e.target.value)}></textarea>
                             </div>
                         </div>
-                        <button type="submit" style={{ marginTop: 16 }}> Save Profile</button>
+                        <BusyButton type="submit" busy={editBusy} busyLabel="Saving…" style={{ marginTop: 16 }}> Save Profile</BusyButton>
                     </div>
                 </form>
             </ProfileModal>

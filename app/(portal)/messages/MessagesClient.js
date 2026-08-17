@@ -6,6 +6,8 @@ import { get, GoalUser, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 import RteEditor from "../apps/RteEditor";
 import { escapeHtml, getEditorHtml, sanitizeHtml, stripHtml } from "../apps/html";
 import {
@@ -231,6 +233,7 @@ export default function MessagesClient() {
     useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
     const [loading, setLoading] = useState(true);
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const [messages, setMessages] = useState([]);
     const [users, setUsers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -391,7 +394,6 @@ export default function MessagesClient() {
     const saveMessages = async (list) => {
         try {
             await save("messages", persistableCollection(list).filter(isEnvelopeMessage), { admin: false });
-            await loadMessages();
         } catch (e) {
             console.error("Error saving messages:", e);
             alert("Failed to transmit message data to server.");
@@ -507,7 +509,7 @@ export default function MessagesClient() {
         openModal(setComposeOpen, setComposeShown);
     };
 
-    const sendMessage = async () => {
+    const sendMessage = () => runFormBusy(async () => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
         const channel = normalizeChannel(composeChannel);
         const rawHtml = getEditorHtml(composeEditorRef.current);
@@ -561,7 +563,7 @@ export default function MessagesClient() {
         setComposeKey("");
         setComposeKeyShow(false);
         closeModal(setComposeOpen, setComposeShown);
-    };
+    });
 
     const deleteMessage = async (id) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -603,7 +605,7 @@ export default function MessagesClient() {
         openModal(setEditOpen, setEditShown);
     };
 
-    const saveEditMessage = async () => {
+    const saveEditMessage = () => runFormBusy(async () => {
         const channel = normalizeChannel(editChannel);
         const rawHtml = getEditorHtml(editEditorRef.current);
         const rawText = stripHtml(rawHtml);
@@ -664,7 +666,7 @@ export default function MessagesClient() {
             });
         }
         closeModal(setEditOpen, setEditShown, () => setEditId(null));
-    };
+    });
 
     const composeIsDirect = normalizeChannel(composeChannel) === DIRECT_CHANNEL;
     const editIsDirect = normalizeChannel(editChannel) === DIRECT_CHANNEL;
@@ -909,9 +911,9 @@ export default function MessagesClient() {
                         )}
                         <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Message Content</label>
                         <RteEditor seedKey={composeSeed} initialHtml="" placeholder="Type message content to encrypt..." editorRef={composeEditorRef} />
-                        <button type="button" onClick={sendMessage} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Sending…" onClick={sendMessage} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600, width: "100%" }}>
                             Encrypt & Transmit
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -956,9 +958,9 @@ export default function MessagesClient() {
                         )}
                         <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Message Content</label>
                         <RteEditor seedKey={editSeed} initialHtml="" placeholder="Type message content to encrypt..." editorRef={editEditorRef} />
-                        <button type="button" onClick={saveEditMessage} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditMessage} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "#111827", fontWeight: 600, width: "100%" }}>
                             Save Changes
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>

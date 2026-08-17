@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { get, save, watch } from "@/lib/portalApi";
 import { useSession, clearActiveModule, setAdminView } from "@/lib/session";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -108,6 +110,7 @@ export default function RoleAccessClient() {
     const [adminEmails, setAdminEmails] = useState([]);
     const [allowedInput, setAllowedInput] = useState("");
     const [adminInput, setAdminInput] = useState("");
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
 
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
@@ -189,7 +192,7 @@ export default function RoleAccessClient() {
         }
     };
 
-    const addEmail = async (type) => {
+    const addEmail = (type) => runFormBusy(async () => {
         const raw = type === "allowed" ? allowedInput : adminInput;
         const email = raw.trim().toLowerCase();
         if (!email) return;
@@ -234,9 +237,9 @@ export default function RoleAccessClient() {
         setAllowedEmails(nextAllowed);
         setAdminEmails(nextAdmins);
         await persist(nextAllowed, nextAdmins);
-    };
+    });
 
-    const removeEmail = async (type, email) => {
+    const removeEmail = (type, email) => runFormBusy(async () => {
         const current = actorRef.current || { email: "" };
         const me = (current.email || "").trim().toLowerCase();
         const isMe = email.toLowerCase() === me;
@@ -282,7 +285,7 @@ export default function RoleAccessClient() {
             clearActiveModule();
             router.push("/");
         }
-    };
+    });
 
     const closeModule = () => {
         clearActiveModule();
@@ -349,10 +352,12 @@ export default function RoleAccessClient() {
                                 />
                                 <button
                                     type="button"
+                                    disabled={formBusy}
+                                    aria-busy={formBusy}
                                     onClick={() => addEmail("allowed")}
                                     style={{ width: "auto", padding: "0 18px", background: "linear-gradient(135deg, var(--success), #059669)", boxShadow: "0 4px 12px rgba(16, 185, 129, 0.25)", color: "white" }}
                                 >
-                                    <i className="fa-solid fa-plus"></i>
+                                    {formBusy ? <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> : <i className="fa-solid fa-plus"></i>}
                                 </button>
                             </div>
                             <div className="list-container" style={{ maxHeight: 420, overflowY: "auto", paddingRight: 4, gap: 10 }}>
@@ -394,8 +399,8 @@ export default function RoleAccessClient() {
                                         }
                                     }}
                                 />
-                                <button type="button" onClick={() => addEmail("admins")} style={{ width: "auto", padding: "0 18px" }}>
-                                    <i className="fa-solid fa-plus"></i>
+                                <button type="button" disabled={formBusy} aria-busy={formBusy} onClick={() => addEmail("admins")} style={{ width: "auto", padding: "0 18px" }}>
+                                    {formBusy ? <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> : <i className="fa-solid fa-plus"></i>}
                                 </button>
                             </div>
                             <div className="list-container" style={{ maxHeight: 420, overflowY: "auto", paddingRight: 4, gap: 10 }}>

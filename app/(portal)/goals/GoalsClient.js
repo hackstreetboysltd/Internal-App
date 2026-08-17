@@ -6,6 +6,8 @@ import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { notifyAssigneeOfGoal, notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 import {
     HORIZONS,
     HORIZON_OPTIONS,
@@ -254,6 +256,7 @@ export default function GoalsClient() {
     const [reassigningId, setReassigningId] = useState(null);
     const [reassignFrom, setReassignFrom] = useState("");
     const [reassignTo, setReassignTo] = useState("");
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
 
     const [dialog, setDialog] = useState(null);
     const [dialogShown, setDialogShown] = useState(false);
@@ -349,7 +352,6 @@ export default function GoalsClient() {
     const persistGoals = async (list, { skipReload } = {}) => {
         try {
             await save("goals", stripTitles(persistableCollection(list)));
-            if (!skipReload) await loadAll();
             return true;
         } catch (e) {
             console.error("Error saving goals:", e);
@@ -522,7 +524,7 @@ export default function GoalsClient() {
         });
     };
 
-    const saveUnifiedGoal = async () => {
+    const saveUnifiedGoal = () => runFormBusy(async () => {
         const currentActor = actorRef.current || { name: "", email: "" };
         const itemsArray = draftItems.map((d) => (editingKey === d.key ? editText : d.text).trim()).filter(Boolean);
         if (!isAdminView && !(currentActor.name || "")) {
@@ -590,7 +592,7 @@ export default function GoalsClient() {
                 if (!saved) return;
                 const assigneeChanged = isAssigned && (!wasAssigned || previousAssigneeEmail !== targetEmail);
                 if (assigneeChanged) {
-                    await notifyAssigneeOfGoal({
+                    notifyAssigneeOfGoal({
                         assigneeName: targetUser,
                         assigneeEmail: targetEmail,
                         actorName: currentActor.name,
@@ -632,7 +634,7 @@ export default function GoalsClient() {
             const saved = await persistGoals(currentDB);
             if (!saved) return;
             if (isAssigned) {
-                await notifyAssigneeOfGoal({
+                notifyAssigneeOfGoal({
                     assigneeName: targetUser,
                     assigneeEmail: targetEmail,
                     actorName: currentActor.name,
@@ -710,7 +712,7 @@ export default function GoalsClient() {
             excludeEmail: currentActor.email,
         });
         closeUnified();
-    };
+    });
 
     const deleteWorkspaceRecord = async (id) => {
         const currentActor = actorRef.current || { name: "", email: "" };
@@ -752,7 +754,6 @@ export default function GoalsClient() {
             await loadAll();
             return;
         }
-        await loadAll();
     };
 
     const adminToggleGoal = async (recordId, goalIndex) => {
@@ -949,7 +950,7 @@ export default function GoalsClient() {
             : `${count} personal goals will move from ${fromEmail} to ${toEmail}.`;
     })();
 
-    const confirmReassignGoals = async () => {
+    const confirmReassignGoals = () => runFormBusy(async () => {
         const currentActor = actorRef.current || { name: "", email: "" };
         const fromEmail = (reassignFrom || "").trim().toLowerCase();
         const toEmail = (reassignTo || "").trim().toLowerCase();
@@ -1005,7 +1006,7 @@ export default function GoalsClient() {
         if (!saved) return;
         if (!previousEmails.has(toEmail)) {
             const sample = targets[0];
-            await notifyAssigneeOfGoal({
+            notifyAssigneeOfGoal({
                 assigneeName: profileNameForEmail(users, toEmail),
                 assigneeEmail: toEmail,
                 actorName: currentActor.name,
@@ -1015,7 +1016,7 @@ export default function GoalsClient() {
             });
         }
         closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null));
-    };
+    });
 
     const assigneeOptions = useMemo(() => {
         const emails = directoryEmails(users);
@@ -1464,9 +1465,9 @@ export default function GoalsClient() {
                                 )}
                             </>
                         )}
-                        <button type="button" onClick={saveUnifiedGoal} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveUnifiedGoal} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%" }}>
                             {saveBtnLabel}
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -1620,9 +1621,9 @@ export default function GoalsClient() {
                             </select>
                         </div>
                         <p style={{ fontSize: "0.85rem", color: "#cbd5e1", lineHeight: 1.5, margin: "0 0 16px 0" }}>{reassignPreview}</p>
-                        <button type="button" onClick={confirmReassignGoals} style={{ background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%", marginBottom: 0 }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Reassigning…" onClick={confirmReassignGoals} style={{ background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%", marginBottom: 0 }}>
                             Reassign
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>

@@ -8,6 +8,8 @@ import { trackActivity } from "@/lib/activityTracker";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 import RteEditor from "./RteEditor";
 import { getEditorHtml, stripHtml } from "./html";
 
@@ -93,6 +95,7 @@ export default function AppsClient() {
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const [loading, setLoading] = useState(true);
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const [apps, setApps] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [refreshSpin, setRefreshSpin] = useState(false);
@@ -155,7 +158,6 @@ export default function AppsClient() {
     const saveApps = async (list) => {
         try {
             await save("apps", list);
-            await loadApps();
         } catch (e) {
             console.error("Error saving apps:", e);
             alert("Failed to save data to physical database server.");
@@ -192,7 +194,7 @@ export default function AppsClient() {
         openModal(setRegisterOpen, setRegisterShown);
     };
 
-    const addApp = async () => {
+    const addApp = () => runFormBusy(async () => {
         const name = appName.trim();
         const desc = getEditorHtml(registerEditorRef.current);
         const githubRepo = appGithubRepo.trim();
@@ -222,7 +224,7 @@ export default function AppsClient() {
         setAppName("");
         setAppGithubRepo("");
         closeModal(setRegisterOpen, setRegisterShown);
-    };
+    });
 
     const deleteApp = async (appId) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -263,7 +265,7 @@ export default function AppsClient() {
         openModal(setEditOpen, setEditShown);
     };
 
-    const saveEditApp = async () => {
+    const saveEditApp = () => runFormBusy(async () => {
         const id = Number(editAppId);
         const name = editAppName.trim();
         const desc = getEditorHtml(editEditorRef.current);
@@ -294,7 +296,7 @@ export default function AppsClient() {
         });
 
         closeModal(setEditOpen, setEditShown);
-    };
+    });
 
     const approvePending = async (id) => {
         if (!confirm("Approve this app registration?")) return;
@@ -482,7 +484,7 @@ export default function AppsClient() {
                         <label htmlFor="appGithubRepo" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>GitHub Repo (optional)</label>
                         <input type="text" id="appGithubRepo" placeholder="e.g. octocat/hello-world" value={appGithubRepo} onChange={(e) => setAppGithubRepo(e.target.value)} />
 
-                        <button type="button" onClick={addApp}> Register App</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Registering…" onClick={addApp}> Register App</BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -508,7 +510,7 @@ export default function AppsClient() {
                         <label htmlFor="editAppGithubRepo" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>GitHub Repo (optional)</label>
                         <input type="text" id="editAppGithubRepo" placeholder="e.g. octocat/hello-world" value={editAppGithubRepo} onChange={(e) => setEditAppGithubRepo(e.target.value)} />
 
-                        <button type="button" onClick={saveEditApp}> Save Changes</button>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditApp}> Save Changes</BusyButton>
                     </div>
                 </div>
             </ModuleModal>

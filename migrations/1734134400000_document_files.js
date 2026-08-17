@@ -12,7 +12,7 @@ exports.up = (pgm) => {
       notNull: true,
       default: pgm.func("now()"),
     },
-  });
+  }, { ifNotExists: true });
 };
 
 /** @param {import('node-pg-migrate').MigrationBuilder} pgm */

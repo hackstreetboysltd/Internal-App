@@ -8,6 +8,7 @@ import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { portalNowIso } from "@/lib/portalTime";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
 import {
     ITEMS_PER_PAGE,
     MAX_FILE_BYTES,
@@ -325,7 +326,6 @@ export default function DocumentsClient() {
     const saveDocuments = async (list) => {
         try {
             await save("documents", list);
-            await loadDocuments();
         } catch (e) {
             console.error("Error saving documents:", e);
             alert("Failed to save documents to the database.");
@@ -392,6 +392,7 @@ export default function DocumentsClient() {
     };
 
     const uploadDocuments = async () => {
+        if (saving) return;
         if (!pickedFile) return alert("Choose a file to upload.");
         const displayName = sanitizeDocumentName(saveAsName) || pickedFile.name || "document";
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -697,9 +698,9 @@ export default function DocumentsClient() {
                                 onSubmit={() => { if (!saving) uploadDocuments(); }}
                             />
                         ) : null}
-                        <button type="button" onClick={uploadDocuments} disabled={saving || !pickedFile}>
-                            {saving ? "Uploading..." : "Upload"}
-                        </button>
+                        <BusyButton type="button" busy={saving} busyLabel="Uploading…" onClick={uploadDocuments} disabled={!pickedFile}>
+                            Upload
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>

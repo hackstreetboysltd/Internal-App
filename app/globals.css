@@ -337,6 +337,19 @@ body {
     box-sizing: border-box;
 }
 
+.modal-body button[aria-busy="true"],
+.modal-content button[aria-busy="true"],
+.modal-body button:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+.modal-body button[aria-busy="true"] .fa-spinner,
+.modal-content button[aria-busy="true"] .fa-spinner {
+    margin-right: 0.15em;
+}
+
 /* Custom scrollbar for modal body scroll */
 .modal-body::-webkit-scrollbar {
     width: 6px;

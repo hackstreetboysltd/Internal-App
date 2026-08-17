@@ -7,6 +7,8 @@ import { approve, get, reject, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -123,6 +125,7 @@ export default function SkillsClient() {
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const [loading, setLoading] = useState(true);
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const [skills, setSkills] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -185,7 +188,6 @@ export default function SkillsClient() {
     const saveSkills = async (list) => {
         try {
             await save("skills", list);
-            await loadSkills();
         } catch (e) {
             console.error("Error saving skills:", e);
             alert("Failed to save skill entry to database.");
@@ -238,7 +240,7 @@ export default function SkillsClient() {
         }, 300);
     };
 
-    const addSkill = async () => {
+    const addSkill = () => runFormBusy(async () => {
         const author = contribName.trim();
         const title = skillTitle.trim();
         const body = skillDesc.trim();
@@ -262,7 +264,7 @@ export default function SkillsClient() {
         setSkillTitle("");
         setSkillDesc("");
         closeModal(setShareOpen, setShareShown);
-    };
+    });
 
     const deleteSkill = async (id) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -301,7 +303,7 @@ export default function SkillsClient() {
         openModal(setEditOpen, setEditShown);
     };
 
-    const saveEditSkill = async () => {
+    const saveEditSkill = () => runFormBusy(async () => {
         const id = parseInt(editId, 10);
         const author = editAuthor.trim();
         const title = editTitle.trim();
@@ -330,7 +332,7 @@ export default function SkillsClient() {
             });
         }
         closeModal(setEditOpen, setEditShown);
-    };
+    });
 
     const approvePending = async (id) => {
         if (!confirm("Approve this skill publication?")) return;
@@ -510,9 +512,9 @@ export default function SkillsClient() {
                         <label htmlFor="editSkillDesc" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Guidance Details</label>
                         <textarea id="editSkillDesc" placeholder="Describe the skills, commands, or advice clearly..." required value={editDesc} onChange={(e) => setEditDesc(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }}></textarea>
 
-                        <button type="button" onClick={saveEditSkill} style={{ marginTop: 20, background: "#fbbf24", borderColor: "#fbbf24", color: "#1e1b4b", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditSkill} style={{ marginTop: 20, background: "#fbbf24", borderColor: "#fbbf24", color: "#1e1b4b", fontWeight: 600, width: "100%" }}>
                             Save Changes
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -533,9 +535,9 @@ export default function SkillsClient() {
                         <label htmlFor="skillDesc" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Guidance Details</label>
                         <textarea id="skillDesc" placeholder="Describe the skills, commands, or advice clearly..." required value={skillDesc} onChange={(e) => setSkillDesc(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }}></textarea>
 
-                        <button type="button" onClick={addSkill} style={{ marginTop: 20, background: "#fbbf24", borderColor: "#fbbf24", color: "#1e1b4b", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Publishing…" onClick={addSkill} style={{ marginTop: 20, background: "#fbbf24", borderColor: "#fbbf24", color: "#1e1b4b", fontWeight: 600, width: "100%" }}>
                             Publish Skill
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>

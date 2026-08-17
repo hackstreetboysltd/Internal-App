@@ -7,6 +7,8 @@ import { approve, get, reject, save, watch } from "@/lib/portalApi";
 import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
+import BusyButton from "@/components/BusyButton";
+import { useBusy } from "@/lib/useBusy";
 
 const ITEMS_PER_PAGE = 5;
 const LEADERBOARD_ITEMS_PER_PAGE = 5;
@@ -229,6 +231,7 @@ export default function ProceduresClient() {
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const [loading, setLoading] = useState(true);
+    const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const [procedures, setProcedures] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -295,7 +298,6 @@ export default function ProceduresClient() {
     const saveProcedures = async (list) => {
         try {
             await save("procedures", list);
-            await loadProcedures();
         } catch (e) {
             console.error("Error saving procedures:", e);
             alert("Failed to save procedures runbook to database.");
@@ -361,7 +363,7 @@ export default function ProceduresClient() {
         }, 300);
     };
 
-    const addProcedure = async () => {
+    const addProcedure = () => runFormBusy(async () => {
         const name = author.trim();
         const guideTitle = title.trim();
         const steps = shareSteps.map((s) => s.trim()).filter(Boolean).join("\n");
@@ -385,7 +387,7 @@ export default function ProceduresClient() {
         setTitle("");
         setShareSteps([]);
         closeModal(setShareOpen, setShareShown);
-    };
+    });
 
     const deleteProcedure = async (id) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -424,7 +426,7 @@ export default function ProceduresClient() {
         openModal(setEditOpen, setEditShown);
     };
 
-    const saveEditProcedure = async () => {
+    const saveEditProcedure = () => runFormBusy(async () => {
         const id = parseInt(editId, 10);
         const name = editAuthor.trim();
         const guideTitle = editTitle.trim();
@@ -453,7 +455,7 @@ export default function ProceduresClient() {
             });
         }
         closeModal(setEditOpen, setEditShown);
-    };
+    });
 
     const approvePending = async (id) => {
         if (!confirm("Approve this procedure?")) return;
@@ -706,9 +708,9 @@ export default function ProceduresClient() {
                         <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Execution Steps</label>
                         <StepsEditor steps={editSteps} setSteps={setEditSteps} inputId="editProcStepInput" />
 
-                        <button type="button" onClick={saveEditProcedure} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "white", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditProcedure} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "white", fontWeight: 600, width: "100%" }}>
                             Save Changes
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>
@@ -729,9 +731,9 @@ export default function ProceduresClient() {
                         <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Execution Steps</label>
                         <StepsEditor steps={shareSteps} setSteps={setShareSteps} inputId="newProcStepInput" />
 
-                        <button type="button" onClick={addProcedure} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "white", fontWeight: 600, width: "100%" }}>
+                        <BusyButton type="button" busy={formBusy} busyLabel="Publishing…" onClick={addProcedure} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "white", fontWeight: 600, width: "100%" }}>
                             Publish Procedure
-                        </button>
+                        </BusyButton>
                     </div>
                 </div>
             </ModuleModal>

@@ -76,7 +76,7 @@ export const PUT = withApi(async (request, routeContext, { session }) => {
     return NextResponse.json({ error: auth.message }, { status: auth.status });
   }
 
-  await replaceCollectionItems(collection, body, session.email);
+  await replaceCollectionItems(collection, body, session.email, oldCollection);
   return NextResponse.json({ success: true });
 }, { auth: true, rateLimits: ["ip", "user"] });
 
