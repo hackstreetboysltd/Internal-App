@@ -122,11 +122,11 @@ export function formatPeriodLabel(periodId, type) {
 
 export function getGoalCreatedTime(record) {
     if (record && record.createdAt) {
-        const parsed = new Date(record.createdAt).getTime();
-        if (!Number.isNaN(parsed)) return parsed;
+        const parsed = Date.parse(record.createdAt);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
     }
     const id = Number(record && record.id);
-    return Number.isNaN(id) ? 0 : id;
+    return Number.isFinite(id) && id > 0 ? id : 0;
 }
 
 export function formatGoalCreatedStamp(record) {

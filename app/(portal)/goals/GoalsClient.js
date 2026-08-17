@@ -828,12 +828,8 @@ export default function GoalsClient() {
     const q = searchQuery.toLowerCase().trim();
 
     const workspaceRows = useMemo(() => {
-        const sortedData = [...records].sort((a, b) => {
-            const diff = getGoalCreatedTime(a) - getGoalCreatedTime(b);
-            return sortDir === "asc" ? diff : -diff;
-        });
         const rows = [];
-        sortedData.forEach((record) => {
+        records.forEach((record) => {
             const type = resolveGoalType(record);
             if (timeframe !== "all" && type !== timeframe) return;
             const resolvedPeriod = record.periodId || record.weekId || "Target";
@@ -856,6 +852,18 @@ export default function GoalsClient() {
             matchingGoals.forEach((g) => {
                 rows.push({ record, goal: g, typeLabel, recordEmail, isOwner });
             });
+        });
+        rows.sort((a, b) => {
+            const ta = getGoalCreatedTime(a.record);
+            const tb = getGoalCreatedTime(b.record);
+            const byTime = sortDir === "desc" ? tb - ta : ta - tb;
+            if (byTime !== 0) return byTime;
+            const na = Number(a.record.id);
+            const nb = Number(b.record.id);
+            if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) {
+                return sortDir === "desc" ? nb - na : na - nb;
+            }
+            return (a.goal.index || 0) - (b.goal.index || 0);
         });
         return rows;
     }, [records, sortDir, timeframe, memberFilter, q, goalEmail, actorOwns]);
