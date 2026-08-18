@@ -327,14 +327,14 @@
 
     .apps-module .clickable-card,
     .apps-module .skel-app-card {
-        min-height: clamp(6.5rem, 22vw, 8.25rem);
         gap: clamp(0.5rem, 2vw, 0.75rem);
     }
 
     .apps-module .app-card-desc {
         font-size: var(--mod-text);
-        min-height: 0;
-        -webkit-line-clamp: 4;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        max-height: calc(1.5em * 3);
     }
 
     .apps-module .tab-btn,

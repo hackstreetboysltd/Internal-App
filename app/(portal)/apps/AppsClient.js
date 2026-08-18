@@ -404,7 +404,7 @@ export default function AppsClient() {
                                         >
                                             <div className="app-card-top">
                                                 <h4 title={app.name}>
-                                                    {app.name}
+                                                    <span className="app-card-title">{app.name}</span>
                                                     {isAdminView && app.pendingType ? (
                                                         <span
                                                             className="badge"
