@@ -454,7 +454,7 @@ iframe {
 /* Dashboard Stats Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(3, clamp(104px, 22vw, 176px));
+    grid-template-columns: repeat(4, clamp(96px, 16vw, 152px));
     gap: clamp(8px, 1.6vw, 16px);
     justify-content: center;
     margin-top: 28px;
@@ -705,7 +705,7 @@ body.module-open .active-bar {
 /* Tablet & Smaller Desktop Screens (<= 1024px) */
 @media (max-width: 1024px) {
     .dashboard-grid {
-        grid-template-columns: repeat(3, clamp(100px, 20vw, 160px));
+        grid-template-columns: repeat(4, clamp(90px, 15vw, 140px));
     }
 }
 
@@ -745,7 +745,7 @@ body.module-open .active-bar {
     }
 
     .dashboard-grid {
-        grid-template-columns: repeat(3, clamp(96px, 26vw, 140px));
+        grid-template-columns: repeat(4, clamp(80px, 20vw, 120px));
         gap: 10px;
     }
 
@@ -826,7 +826,7 @@ body.module-open .active-bar {
     }
 
     .dashboard-grid {
-        grid-template-columns: repeat(3, minmax(0, 104px));
+        grid-template-columns: repeat(4, minmax(0, 88px));
         gap: 8px;
     }
 
@@ -954,7 +954,7 @@ body.module-open .active-bar {
     .dashboard-grid {
         margin-top: clamp(0.7rem, 4vw, 1.5rem);
         gap: clamp(0.35rem, 1.8vw, 0.625rem);
-        grid-template-columns: repeat(3, minmax(0, clamp(4.4rem, 27vw, 6.5rem)));
+        grid-template-columns: repeat(4, minmax(0, clamp(3.8rem, 20vw, 5.5rem)));
     }
 
     .mod-tile {

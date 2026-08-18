@@ -16,4 +16,4 @@ async function handler(request) {
   return response;
 }
 
-export const POST = withApi(handler, { auth: true, rateLimits: ["ip", "user"] });
+export const POST = withApi(handler, { auth: false, rateLimits: ["ip"] });

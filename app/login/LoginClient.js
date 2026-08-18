@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/apiPath";
 import "./login.css";
 
@@ -34,6 +34,7 @@ function getOrCreateTabSessionId() {
 }
 
 export default function LoginPage() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [busyLabel, setBusyLabel] = useState(null);
     const [inApp, setInApp] = useState(false);
@@ -42,6 +43,24 @@ export default function LoginPage() {
     // Tolerate trailing junk (e.g. legacy `?notAllowed=1/` from appUrl bug).
     const notAllowedParam = searchParams.get("notAllowed") || "";
     const notAllowed = /^1/.test(notAllowedParam) && !dismissedNotAllowed;
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(apiPath("/api/auth/me"), {
+                    credentials: "include",
+                    cache: "no-store",
+                });
+                if (cancelled || !res.ok) return;
+                const returnTo = searchParams.get("returnTo") || "/";
+                router.replace(returnTo.startsWith("/") ? returnTo : "/");
+            } catch {
+                /* stay on login */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [router, searchParams]);
 
     useEffect(() => {
         const t = setTimeout(() => {

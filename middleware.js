@@ -40,9 +40,6 @@ export function middleware(request) {
   const sid = request.cookies.get(cookieName)?.value;
 
   if (isPublicPath(pathname)) {
-    if (sid && (pathname === "/login" || pathname === "/login/")) {
-      return NextResponse.redirect(new URL(withBasePath("/"), request.url));
-    }
     return NextResponse.next();
   }
 
