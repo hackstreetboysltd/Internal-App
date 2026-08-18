@@ -3,6 +3,7 @@
  *
  * Usage:
  *   node scripts/migrate-firestore-to-pg.mjs --live
+ *   node scripts/migrate-firestore-to-pg.mjs --live --wipe
  *   node scripts/migrate-firestore-to-pg.mjs --from-export=./firestore-export.json
  *   node scripts/migrate-firestore-to-pg.mjs --live --dry-run
  *
@@ -93,12 +94,14 @@ function parseArgs(argv) {
     dryRun: false,
     collection: null,
     verifyOnly: false,
+    wipe: false,
   };
 
   for (const arg of argv) {
     if (arg === "--live") options.live = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--verify-only") options.verifyOnly = true;
+    else if (arg === "--wipe") options.wipe = true;
     else if (arg.startsWith("--from-export=")) options.fromExport = arg.slice("--from-export=".length);
     else if (arg.startsWith("--collection=")) options.collection = arg.slice("--collection=".length);
   }
@@ -212,9 +215,54 @@ async function loadFromFirestoreClient() {
 /**
  * @param {unknown[]} items
  */
+function toPlainJson(value) {
+  if (value == null) return value;
+  if (typeof value.toDate === "function" && typeof value.seconds === "number") {
+    try {
+      return value.toDate().toISOString();
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) return value.map(toPlainJson);
+  if (typeof value === "object") {
+    if (Object.prototype.toString.call(value) === "[object Date]") {
+      return value.toISOString();
+    }
+    const out = {};
+    for (const [key, nested] of Object.entries(value)) {
+      out[key] = toPlainJson(nested);
+    }
+    return out;
+  }
+  return value;
+}
+
 function normalizeItems(items) {
   if (!Array.isArray(items)) return [];
-  return items.filter((item) => item && typeof item === "object");
+  return items
+    .filter((item) => item && typeof item === "object")
+    .map((item) => toPlainJson(item));
+}
+
+async function wipeDestination(dest, dryRun) {
+  console.log(
+    dryRun
+      ? "Wipe (dry run): tombstone collection_items; replace role_access and document_files"
+      : "Tombstoning existing collection_items and wiping role_access + document_files …",
+  );
+  if (dryRun) return;
+  await dest.query(
+    `UPDATE collection_items
+     SET deleted_at = now(), updated_at = now()
+     WHERE deleted_at IS NULL`,
+  );
+  await dest.query("DELETE FROM role_access");
+  try {
+    await dest.query("DELETE FROM document_files");
+  } catch {
+    /* table may not exist on older DBs */
+  }
 }
 
 function createDest(url) {
@@ -250,7 +298,7 @@ function createDest(url) {
  * @param {unknown[]} items
  * @param {boolean} dryRun
  */
-async function writeCollectionItems(dest, collectionName, items, dryRun) {
+async function writeCollectionItems(dest, collectionName, items, dryRun, { upsert = false } = {}) {
   const list = normalizeItems(items);
 
   if (collectionName === "role_access") {
@@ -271,16 +319,31 @@ async function writeCollectionItems(dest, collectionName, items, dryRun) {
 
   if (dryRun) return list.length;
 
-  await dest.query("DELETE FROM collection_items WHERE collection_name = $1", [collectionName]);
+  if (!upsert) {
+    await dest.query("DELETE FROM collection_items WHERE collection_name = $1", [collectionName]);
+  }
 
   for (const item of list) {
     const rowId = String(item.id ?? item.email ?? Date.now());
     const authorEmail = item.author_email || item.authorEmail || null;
-    await dest.query(
-      `INSERT INTO collection_items (collection_name, id, data, author_email, updated_at)
-       VALUES ($1, $2, $3::jsonb, $4, now())`,
-      [collectionName, rowId, pgValue(item), authorEmail],
-    );
+    if (upsert) {
+      await dest.query(
+        `INSERT INTO collection_items (collection_name, id, data, author_email, updated_at, deleted_at)
+         VALUES ($1, $2, $3::jsonb, $4, now(), NULL)
+         ON CONFLICT (collection_name, id) DO UPDATE SET
+           data = EXCLUDED.data,
+           author_email = EXCLUDED.author_email,
+           updated_at = now(),
+           deleted_at = NULL`,
+        [collectionName, rowId, pgValue(item), authorEmail],
+      );
+    } else {
+      await dest.query(
+        `INSERT INTO collection_items (collection_name, id, data, author_email, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, now())`,
+        [collectionName, rowId, pgValue(item), authorEmail],
+      );
+    }
   }
 
   return list.length;
@@ -298,14 +361,14 @@ function collectionNamesFrom(data, only) {
  * @param {{ dryRun?: boolean, collection?: string | null }} [options]
  */
 export async function migrateFirestoreData(dest, data, options = {}) {
-  const { dryRun = false, collection = null } = options;
+  const { dryRun = false, collection = null, upsert = false } = options;
   const names = collectionNamesFrom(data, collection);
   /** @type {Record<string, number>} */
   const written = {};
 
   for (const name of names) {
     const items = data[name] || [];
-    written[name] = await writeCollectionItems(dest, name, items, dryRun);
+    written[name] = await writeCollectionItems(dest, name, items, dryRun, { upsert });
   }
 
   return written;
@@ -379,9 +442,14 @@ async function main() {
       return;
     }
 
+    if (options.wipe) {
+      await wipeDestination(dest, options.dryRun);
+    }
+
     const written = await migrateFirestoreData(dest, data, {
       dryRun: options.dryRun,
       collection: options.collection,
+      upsert: options.wipe,
     });
 
     console.log(options.dryRun ? "Dry run counts:" : "Migrated row counts:");
