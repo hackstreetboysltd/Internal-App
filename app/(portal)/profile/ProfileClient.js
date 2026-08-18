@@ -626,9 +626,7 @@ export default function ProfileClient() {
                     </div>
                 ) : (
                     <div id="profileContent">
-                        <div>
-                            <h3 style={{ marginBottom: 16 }}> Teammates Directory</h3>
-                            <div id="teammatesList" className="team-grid" style={{ marginBottom: 12 }}>
+                        <div id="teammatesList" className="team-grid" style={{ marginBottom: 12 }}>
                                 {filteredTeammates.length === 0 ? (
                                     <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
                                         <p>No teammate profiles found matching your search.</p>
@@ -653,12 +651,7 @@ export default function ProfileClient() {
                                                 <div className="member-card-header">
                                                     <AvatarFace src={member.avatar} name={member.name} className="member-avatar" />
                                                     <div className="member-info">
-                                                        <h4 style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                            {member.name}
-                                                            {isMe ? (
-                                                                <span className="badge" style={{ fontSize: "0.7rem", padding: "2px 6px", marginLeft: 6, background: "rgba(255, 122, 0, 0.15)", color: "#ff7a00", borderColor: "rgba(255, 122, 0, 0.3)" }}>You</span>
-                                                            ) : null}
-                                                        </h4>
+                                                        <h4>{member.name}</h4>
                                                         <p>{member.role || "Teammate"}</p>
                                                     </div>
                                                 </div>
@@ -712,7 +705,6 @@ export default function ProfileClient() {
                                         );
                                     })
                                 )}
-                            </div>
                         </div>
                     </div>
                 )}

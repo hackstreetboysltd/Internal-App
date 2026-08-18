@@ -206,29 +206,31 @@
 
 .profile-module .skel-member-header {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
     margin-bottom: 16px;
 }
 
 .profile-module .skel-member-info {
-    flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
-    min-width: 0;
+    width: 100%;
 }
 
 .profile-module .skel-member-bio {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
     margin-bottom: 16px;
 }
 
 .profile-module .skel-member-footer {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
     gap: 8px;
 }
@@ -353,13 +355,11 @@
 
 .profile-module .member-card-header {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
+    text-align: center;
+    gap: 10px;
     margin-bottom: 16px;
-}
-
-.profile-module .member-card.has-menu .member-card-header {
-    padding-right: 28px;
 }
 
 .profile-module .member-card-menu {
@@ -383,11 +383,18 @@
     flex-shrink: 0;
 }
 
+.profile-module .member-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .profile-module .member-info h4 {
     margin: 0;
     font-size: 1.05rem;
     font-weight: 600;
     color: white;
+    justify-content: center;
 }
 
 .profile-module .member-info p {
@@ -403,6 +410,7 @@
     margin: 0;
     flex-grow: 1;
     font-style: italic;
+    text-align: center;
 }
 
 .profile-module .member-footer {
@@ -410,8 +418,11 @@
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
 }
 
 .profile-module .member-dept {
