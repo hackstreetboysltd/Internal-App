@@ -190,11 +190,7 @@ export function placeCaretAtEnd(el) {
     sel.addRange(range);
 }
 
-export function allowedEmailsFromRoleAccess(roleAccess) {
-    const list = Array.isArray(roleAccess) ? roleAccess : [];
-    const allowedRec = list.find((r) => r && r.id === "allowed");
-    return (allowedRec && allowedRec.emails ? allowedRec.emails : []).map((e) => (e || "").trim().toLowerCase()).filter(Boolean);
-}
+export { allowedEmailsFromRoleAccess } from "@/lib/roleAccess";
 
 export function getDirectoryUsers(users, allowedEmails) {
     const normalizedAllowed = (allowedEmails || []).map((e) => (e || "").trim().toLowerCase());

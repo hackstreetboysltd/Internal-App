@@ -22,6 +22,15 @@ export function cloneMessages(list) {
     }));
 }
 
+/** Stable fingerprint for decrypt memoization. */
+export function decryptFingerprint(m) {
+    if (!m?.id) return "";
+    const wraps = (m.wrappedKeys || [])
+        .map((w) => `${w.email || ""}:${w.ct || w.ciphertext || ""}:${w.ephemPub || w.ephemeralPub || ""}`)
+        .join("|");
+    return `${m.id}|${wraps}|${m.body || ""}|${m.timestamp || ""}`;
+}
+
 export function getMessageCreatedTime(m) {
     if (m && m.createdAt) {
         const parsed = new Date(m.createdAt).getTime();

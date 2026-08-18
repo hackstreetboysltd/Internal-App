@@ -34,6 +34,7 @@ import { formatPortalDateTime } from "@/lib/portalTime";
 import {
     ITEMS_PER_PAGE,
     cloneMessages,
+    decryptFingerprint,
     formatMessageCreatedStamp,
     getMessageCreatedTime,
     messageEmail,
@@ -246,6 +247,7 @@ export default function MessagesClient() {
     const [unlocking, setUnlocking] = useState(false);
     const [refreshSpin, setRefreshSpin] = useState(false);
     const [decoded, setDecoded] = useState({});
+    const decryptCacheRef = useRef(new Map());
 
     const [vaultKey, setVaultKey] = useState("");
     const [vaultShow, setVaultShow] = useState(false);
@@ -363,28 +365,55 @@ export default function MessagesClient() {
 
     useEffect(() => {
         let cancelled = false;
-        const channelMsgs = messages.filter((m) => messageChannel(m) === activeChannel);
+        const q = searchQuery.toLowerCase().trim();
+        const channelMsgs = messages
+            .filter((m) => messageChannel(m) === activeChannel)
+            .sort((a, b) => getMessageCreatedTime(b) - getMessageCreatedTime(a));
         const isDirect = activeChannel === DIRECT_CHANNEL;
         const dKey = isDirect ? null : getVaultPassphrase(activeChannel);
 
+        let targets = channelMsgs;
+        if (!q) {
+            const maxPage = Math.max(1, Math.ceil(channelMsgs.length / ITEMS_PER_PAGE));
+            const page = Math.min(currentPage, maxPage);
+            const startIdx = (page - 1) * ITEMS_PER_PAGE;
+            targets = channelMsgs.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+        }
+
         (async () => {
-            const next = {};
-            await Promise.all(channelMsgs.map(async (m) => {
+            const cache = decryptCacheRef.current;
+            const pending = targets.filter((m) => {
+                const fp = decryptFingerprint(m);
+                const hit = cache.get(m.id);
+                return !hit || hit.fp !== fp;
+            });
+
+            await Promise.all(pending.map(async (m) => {
                 let decryptedText = "";
                 let decResult = null;
+                const fp = decryptFingerprint(m);
                 if (isDirect || dKey) {
                     decResult = await decryptMessage(m, dKey, actorEmail);
                     if (decResult !== DECRYPT_MISMATCH && decResult !== DECRYPT_INVALID && decResult !== NOT_ADDRESSED) {
                         decryptedText = stripHtml(decResult);
                     }
                 }
-                next[m.id] = { decryptedText, decResult };
+                cache.set(m.id, { fp, decryptedText, decResult });
             }));
-            if (!cancelled) setDecoded(next);
+
+            if (cancelled) return;
+            const next = {};
+            channelMsgs.forEach((m) => {
+                const hit = cache.get(m.id);
+                if (hit) {
+                    next[m.id] = { decryptedText: hit.decryptedText, decResult: hit.decResult };
+                }
+            });
+            setDecoded(next);
         })();
 
         return () => { cancelled = true; };
-    }, [messages, activeChannel, vaultTick, actorEmail, identityReady]);
+    }, [messages, activeChannel, vaultTick, actorEmail, identityReady, currentPage, searchQuery]);
 
     useEffect(() => {
         const t = setTimeout(() => setPskUnlocked(readPskUnlocked()), 0);

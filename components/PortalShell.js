@@ -7,20 +7,22 @@ import Dock from "@/components/Dock";
 import FirstTimeSetup from "@/components/FirstTimeSetup";
 import ActivityTrackerBridge from "@/components/ActivityTrackerBridge";
 import { DialogProvider } from "@/components/GlobalDialog";
-import { SessionProvider, useSession, setAdminView, clearActiveModule } from "@/lib/session";
+import { PortalDataProvider } from "@/components/PortalDataProvider";
+import { SessionProvider, useSession, clearActiveModule } from "@/lib/session";
 import { get, save, watch, setGithubPat } from "@/lib/portalApi";
 import { pausedFromSettings, setEmailNotificationsPaused } from "@/lib/emailNotify";
 import { moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
 import { saveActiveModule } from "@/lib/session";
 import { trackActivity } from "@/lib/activityTracker";
-import { emailIsListedAdmin, sessionHasAdminRole } from "@/lib/adminAccess";
 import { isTrustedGithubMessage } from "@/lib/githubMessage";
+
+import { usePortalData } from "@/components/PortalDataProvider";
 
 function PortalChrome({ children }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { session, isAdminView } = useSession();
-    const [adminVisible, setAdminVisible] = useState(false);
+    const { isAdminView } = useSession();
+    const { adminVisible } = usePortalData();
     const [paused, setPaused] = useState(false);
 
     const isDockModule = !!moduleKeyFromPath(pathname);
@@ -29,32 +31,6 @@ function PortalChrome({ children }) {
         document.body.classList.toggle("module-open", isDockModule);
         return () => document.body.classList.remove("module-open");
     }, [isDockModule]);
-
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            if (!session?.email) {
-                if (!cancelled) setAdminVisible(false);
-                return;
-            }
-            const fromSession = sessionHasAdminRole(session);
-            try {
-                const data = await get("role_access", { admin: false });
-                const adminsRecord = Array.isArray(data) ? data.find((r) => r.id === "admins") : null;
-                const isAdminUser = fromSession || emailIsListedAdmin(session.email, adminsRecord?.emails);
-                if (cancelled) return;
-                setAdminVisible(isAdminUser);
-                if (!isAdminUser && isAdminView) {
-                    setAdminView(false);
-                    router.push("/");
-                }
-            } catch (e) {
-                console.warn("Failed to check admin visibility:", e);
-                if (!cancelled) setAdminVisible(fromSession);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [isAdminView, router, session]);
 
     useEffect(() => {
         const apply = (data) => {
@@ -140,9 +116,7 @@ function PortalChrome({ children }) {
                 onLogoClick={goDashboard}
             />
             <main className="content-viewport">
-                <div key={String(isAdminView)}>
-                    {children}
-                </div>
+                {children}
             </main>
             <Dock />
             <FirstTimeSetup />
@@ -153,9 +127,11 @@ function PortalChrome({ children }) {
 export default function PortalShell({ children }) {
     return (
         <SessionProvider requireAuth>
-            <DialogProvider>
-                <PortalChrome>{children}</PortalChrome>
-            </DialogProvider>
+            <PortalDataProvider>
+                <DialogProvider>
+                    <PortalChrome>{children}</PortalChrome>
+                </DialogProvider>
+            </PortalDataProvider>
         </SessionProvider>
     );
 }

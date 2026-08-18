@@ -5,7 +5,7 @@ import { flushActivity, trackActivity } from "@/lib/activityTracker";
 import { useSession } from "@/lib/session";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { formatPortalTime, useServerClock } from "@/lib/portalTime";
+import HeaderClock from "@/components/HeaderClock";
 
 const adminBtnBase = {
     background: "rgba(99, 102, 241, 0.1)",
@@ -19,7 +19,6 @@ export default function Header({ adminVisible, isAdminView, paused, onToggleAdmi
     const { showGlobalDialog } = useGlobalDialog();
     const { logout } = useSession();
     const onObservability = pathname.startsWith("/admin/observability");
-    const { nowMs, source: clockSource, timeZone } = useServerClock();
 
     const handleLogout = async () => {
         const confirmed = await showGlobalDialog({
@@ -42,14 +41,7 @@ export default function Header({ adminVisible, isAdminView, paused, onToggleAdmi
             <div className="logo" onClick={onLogoClick}>
                 <span className="logo-text">HACKSTREETBOYS<span className="logo-sub">LTD</span></span>
             </div>
-            <div
-                className="header-clock"
-                title={`Portal time (${timeZone}) · ${clockSource === "network" ? "synced" : clockSource}`}
-            >
-                <span className="header-clock-time" suppressHydrationWarning>
-                    {nowMs ? formatPortalTime(nowMs, { withMs: false }) : "\u00a0"}
-                </span>
-            </div>
+            <HeaderClock />
             <div className="active-bar-actions">
                 <div className="active-list" id="activeList"></div>
                 <button

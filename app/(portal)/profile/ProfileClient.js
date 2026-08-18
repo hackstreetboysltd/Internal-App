@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { get, save, watch } from "@/lib/portalApi";
 import { sendApprovalEmailToUser } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
@@ -132,11 +133,11 @@ function ProfileModal({ open, shown, onBackdrop, children }) {
 export default function ProfileClient() {
     const router = useRouter();
     const { session, setSession, isAdminView } = useSession();
+    const { allowedEmails } = usePortalData();
     const sessionRef = useRef(session);
 
     const [loading, setLoading] = useState(true);
     const [allProfiles, setAllProfiles] = useState([]);
-    const [allowedEmails, setAllowedEmails] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [refreshSpin, setRefreshSpin] = useState(false);
 
@@ -219,15 +220,6 @@ export default function ProfileClient() {
                 if (!Array.isArray(profiles)) profiles = [];
                 setAllProfiles(profiles);
 
-                try {
-                    const raData = await get("role_access");
-                    const allowedRec = Array.isArray(raData) ? raData.find((r) => r.id === "allowed") : null;
-                    setAllowedEmails(allowedRec ? allowedRec.emails || [] : []);
-                } catch (err) {
-                    console.warn("Failed to load role access allowed list:", err);
-                    setAllowedEmails([]);
-                }
-
                 let mine = profiles.find(
                     (p) => p.email && p.email.toLowerCase() === user.email.toLowerCase(),
                 );
@@ -264,14 +256,9 @@ export default function ProfileClient() {
         const u1 = watch("profile", (profiles) => {
             if (Array.isArray(profiles)) setAllProfiles(profiles);
         });
-        const u2 = watch("role_access", (raData) => {
-            const allowedRec = Array.isArray(raData) ? raData.find((r) => r.id === "allowed") : null;
-            setAllowedEmails(allowedRec ? allowedRec.emails || [] : []);
-        });
         return () => {
             clearTimeout(t);
             u1();
-            u2();
         };
     }, [session?.email, loadProfiles]);
 

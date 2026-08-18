@@ -1,6 +1,8 @@
 'use client';
 
-import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { MODULES, moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
 import { saveActiveModule } from "@/lib/session";
 import { useSession } from "@/lib/session";
@@ -9,12 +11,26 @@ export default function Dock() {
     const router = useRouter();
     const pathname = usePathname();
     const { isAdminView } = useSession();
-    const activeKey = moduleKeyFromPath(pathname);
+    const routeActiveKey = moduleKeyFromPath(pathname);
+    const [pendingKey, setPendingKey] = useState(null);
+    const activeKey = pendingKey ?? routeActiveKey;
 
-    const open = (mod) => {
+    useEffect(() => {
+        setPendingKey(null);
+    }, [pathname]);
+
+    useEffect(() => {
+        MODULES.forEach((mod) => {
+            router.prefetch(pathForModule(mod.key, isAdminView));
+        });
+    }, [isAdminView, router]);
+
+    const handleNav = (mod) => {
         const name = displayNameForModule(mod.key, isAdminView);
         saveActiveModule(mod.key, name, isAdminView);
-        router.push(pathForModule(mod.key, isAdminView));
+        if (mod.key !== routeActiveKey) {
+            setPendingKey(mod.key);
+        }
     };
 
     return (
@@ -27,17 +43,19 @@ export default function Dock() {
                     const label = isMessages && isAdminView ? "Role Access" : mod.dockLabel;
                     const title = isMessages && isAdminView ? "Role Access Control" : mod.dockTitle;
                     return (
-                        <button
+                        <Link
                             key={mod.key}
+                            href={pathForModule(mod.key, isAdminView)}
+                            prefetch
                             id={isMessages ? "dockMessagesBtn" : undefined}
                             className={selected ? "dock-item selected" : "dock-item"}
-                            type="button"
                             title={title}
-                            onClick={() => open(mod)}
+                            aria-current={selected ? "page" : undefined}
+                            onClick={() => handleNav(mod)}
                         >
                             <i className={icon}></i>
                             <span className="dock-label">{label}</span>
-                        </button>
+                        </Link>
                     );
                 })}
             </div>

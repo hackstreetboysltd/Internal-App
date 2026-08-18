@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { notifyAssigneeOfGoal, notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
+import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
@@ -14,7 +15,6 @@ import {
     ITEMS_PER_PAGE,
     LEADERBOARD_ITEMS_PER_PAGE,
     WORKSPACE_ITEMS_PER_PAGE,
-    allowedEmailsFromRoleAccess,
     capitalize,
     cloneRecords,
     computePeriodId,
@@ -200,6 +200,7 @@ export default function GoalsClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { actor, isAdminView } = useSession();
+    const { allowedEmails } = usePortalData();
     const actorRef = useRef(actor);
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
@@ -217,7 +218,7 @@ export default function GoalsClient() {
     const [records, setRecords] = useState([]);
     const [users, setUsers] = useState([]);
     const [apps, setApps] = useState([]);
-    const [allowedEmails, setAllowedEmails] = useState([]);
+    const [appsWatchActive, setAppsWatchActive] = useState(false);
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -294,24 +295,38 @@ export default function GoalsClient() {
 
     const loadAll = useCallback(async () => {
         try {
-            const [goalsData, profileData, appsData, roleData] = await Promise.all([
+            const [goalsData, profileData] = await Promise.all([
                 get("goals"),
                 get("profile"),
-                get("apps"),
-                get("role_access", { admin: false }),
             ]);
             const nextUsers = Array.isArray(profileData) ? profileData : [];
-            const nextApps = Array.isArray(appsData) ? appsData : [];
-            nextApps.sort((a, b) => (b.name || "").length - (a.name || "").length);
             setRecords(Array.isArray(goalsData) ? goalsData : []);
             setUsers(nextUsers);
-            setApps(nextApps);
-            setAllowedEmails(allowedEmailsFromRoleAccess(roleData));
         } catch (e) {
             console.error("Error fetching workspace goals:", e);
             setRecords([]);
         }
     }, []);
+
+    useEffect(() => {
+        if (appsWatchActive) return;
+        const hasMention = records.some((record) => {
+            if (record.title && record.title.includes("@")) return true;
+            return (record.goals || []).some((goal) => goal.text && goal.text.includes("@"));
+        });
+        if (tagOpen || hasMention) {
+            setAppsWatchActive(true);
+        }
+    }, [appsWatchActive, records, tagOpen]);
+
+    useEffect(() => {
+        if (!appsWatchActive) return undefined;
+        return watch("apps", (d) => {
+            const nextApps = Array.isArray(d) ? d.slice() : [];
+            nextApps.sort((a, b) => (b.name || "").length - (a.name || "").length);
+            setApps(nextApps);
+        }, { onError: () => setApps([]) });
+    }, [appsWatchActive]);
 
     useEffect(() => {
         const tabParam = searchParams.get("tab");
@@ -324,7 +339,7 @@ export default function GoalsClient() {
         const seen = new Set();
         const mark = (key) => {
             seen.add(key);
-            if (seen.size >= 4) setLoading(false);
+            if (seen.size >= 2) setLoading(false);
         };
         const unsubs = [
             watch("goals", (d) => {
@@ -335,16 +350,6 @@ export default function GoalsClient() {
                 setUsers(Array.isArray(d) ? d : []);
                 mark("profile");
             }, { onError: () => { setUsers([]); mark("profile"); } }),
-            watch("apps", (d) => {
-                const nextApps = Array.isArray(d) ? d.slice() : [];
-                nextApps.sort((a, b) => (b.name || "").length - (a.name || "").length);
-                setApps(nextApps);
-                mark("apps");
-            }, { onError: () => { setApps([]); mark("apps"); } }),
-            watch("role_access", (d) => {
-                setAllowedEmails(allowedEmailsFromRoleAccess(d));
-                mark("role_access");
-            }, { admin: false, onError: () => { setAllowedEmails([]); mark("role_access"); } }),
         ];
         return () => unsubs.forEach((u) => u());
     }, [searchParams]);
@@ -449,6 +454,7 @@ export default function GoalsClient() {
         const words = val.split(/\s+/);
         const lastWord = words[words.length - 1] || "";
         if (lastWord.startsWith("@")) {
+            setAppsWatchActive(true);
             setTagOpen(true);
             setTagFilter(lastWord.slice(1));
         } else {

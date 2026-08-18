@@ -110,11 +110,41 @@ async function main() {
   if (!setCookie.includes("sid=")) {
     throw new Error("Rotated session did not Set-Cookie");
   }
-  const oldRaw = await redis.get(`session:${stale.sid}`);
-  if (oldRaw) {
-    throw new Error("Old sid still present after rotation");
+  const newSidMatch = setCookie.match(/sid=([^;]+)/);
+  if (!newSidMatch?.[1]) {
+    throw new Error("Could not parse rotated sid from Set-Cookie");
   }
-  console.log("daily session rotation → new cookie, old sid gone");
+  const newSid = newSidMatch[1];
+
+  const oldRaw = await redis.get(`session:${stale.sid}`);
+  if (!oldRaw) {
+    throw new Error("Expected old sid bridge key after rotation");
+  }
+  const oldBridge = JSON.parse(oldRaw);
+  if (oldBridge._rotatedTo !== newSid) {
+    throw new Error(`Old sid bridge should point to new sid, got ${oldBridge._rotatedTo ?? "null"}`);
+  }
+
+  const newRaw = await redis.get(`session:${newSid}`);
+  if (!newRaw) {
+    throw new Error("New sid missing after rotation");
+  }
+  const newSession = JSON.parse(newRaw);
+  if (newSession.email !== stale.email) {
+    throw new Error("Rotated session email mismatch");
+  }
+  if (newSession._rotatedTo) {
+    throw new Error("New session should not be a bridge record");
+  }
+
+  const bridged = await fetch(`${BASE}/api/auth/me/`, {
+    headers: { Cookie: `sid=${stale.sid}` },
+  });
+  if (!bridged.ok) {
+    throw new Error(`Expected old sid bridge to resolve, got ${bridged.status}`);
+  }
+
+  console.log("daily session rotation → new cookie, old sid bridged to new sid");
 
   const oldId = randomUUID();
   await pool.query(
