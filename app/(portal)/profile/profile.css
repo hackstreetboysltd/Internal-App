@@ -132,6 +132,26 @@
     gap: 12px;
 }
 
+.profile-module .header-actions-tools {
+    justify-content: flex-end;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+@media (max-width: 599px) {
+    /* Keep search + My Profile on one row; avatar stays pinned right */
+    .profile-module .header-actions > .search-input-wrapper {
+        flex: 1 1 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    .profile-module .header-actions-tools {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+}
+
 .profile-module .search-input-wrapper {
     position: relative;
     flex: 1;
