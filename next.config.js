@@ -5,6 +5,13 @@ const nextConfig = {
     unoptimized: true,
   },
   trailingSlash: true,
+  transpilePackages: ["docx-preview", "pptx-preview", "pdfjs-dist"],
+  turbopack: {
+    // pptx-preview uses named lodash imports incompatible with CJS lodash under Turbopack.
+    resolveAlias: {
+      lodash: "lodash-es",
+    },
+  },
   experimental: {
     proxyClientMaxBodySize: "32mb",
     serverActions: {

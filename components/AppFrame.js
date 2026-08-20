@@ -7,7 +7,8 @@ export default function AppFrame({ children }) {
     const pathname = usePathname();
     const bare = pathname.startsWith("/login")
         || pathname.startsWith("/github-connect")
-        || pathname.startsWith("/kernel-test");
+        || pathname.startsWith("/kernel-test")
+        || pathname.startsWith("/documents/view");
     if (bare) return children;
     return <PortalShell>{children}</PortalShell>;
 }
