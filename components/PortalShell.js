@@ -8,11 +8,10 @@ import FirstTimeSetup from "@/components/FirstTimeSetup";
 import ActivityTrackerBridge from "@/components/ActivityTrackerBridge";
 import { DialogProvider } from "@/components/GlobalDialog";
 import { PortalDataProvider } from "@/components/PortalDataProvider";
-import { SessionProvider, useSession, clearActiveModule } from "@/lib/session";
+import { SessionProvider, useSession, clearActiveModule, saveActiveModule, setAdminView } from "@/lib/session";
 import { get, save, watch, setGithubPat } from "@/lib/portalApi";
 import { pausedFromSettings, setEmailNotificationsPaused } from "@/lib/emailNotify";
 import { moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
-import { saveActiveModule } from "@/lib/session";
 import { trackActivity } from "@/lib/activityTracker";
 import { isTrustedGithubMessage } from "@/lib/githubMessage";
 
