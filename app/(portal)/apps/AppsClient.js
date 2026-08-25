@@ -230,7 +230,12 @@ export default function AppsClient() {
         const current = actorRef.current || { name: "A Team Member", email: "" };
         const list = await get("apps");
         const deletedApp = (Array.isArray(list) ? list : []).find((a) => sameId(a.id, appId));
-        if (deletedApp && deletedApp.author && deletedApp.author.toLowerCase() !== current.name.toLowerCase()) {
+        if (
+            !isAdminView
+            && deletedApp
+            && deletedApp.author
+            && deletedApp.author.toLowerCase() !== current.name.toLowerCase()
+        ) {
             alert("Permission Denied: You can only delete applications you added.");
             return;
         }
@@ -253,7 +258,11 @@ export default function AppsClient() {
         const list = await get("apps");
         const app = (Array.isArray(list) ? list : []).find((a) => sameId(a.id, appId));
         if (!app) return alert("App not found");
-        if (app.author && app.author.toLowerCase() !== current.name.toLowerCase()) {
+        if (
+            !isAdminView
+            && app.author
+            && app.author.toLowerCase() !== current.name.toLowerCase()
+        ) {
             alert("Permission Denied: You can only edit applications you added.");
             return;
         }
@@ -277,7 +286,11 @@ export default function AppsClient() {
         const next = Array.isArray(list) ? list.slice() : [];
         const appIndex = next.findIndex((a) => sameId(a.id, id));
         if (appIndex === -1) return alert("App not found");
-        if (next[appIndex].author && next[appIndex].author.toLowerCase() !== current.name.toLowerCase()) {
+        if (
+            !isAdminView
+            && next[appIndex].author
+            && next[appIndex].author.toLowerCase() !== current.name.toLowerCase()
+        ) {
             alert("Permission Denied: You can only edit applications you added.");
             return;
         }
@@ -440,7 +453,7 @@ export default function AppsClient() {
                                                             Reject
                                                         </button>
                                                     </div>
-                                                ) : !isAdminView && isOwner ? (
+                                                ) : (isAdminView || isOwner) ? (
                                                     <div className="app-card-actions" onClick={(e) => e.stopPropagation()}>
                                                         <ItemMenu
                                                             items={[
