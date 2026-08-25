@@ -454,22 +454,33 @@ iframe {
 /* Dashboard Stats Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(4, clamp(96px, 16vw, 152px));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: clamp(8px, 1.6vw, 16px);
     justify-content: center;
     margin-top: 28px;
 }
 
-/* Center the second row when it has three tiles */
-.dashboard-grid .mod-tile:nth-child(5) {
-    grid-column: 2;
+.dashboard-grid:has(.mod-tile) {
+    --dash-tile-size: clamp(96px, 16vw, 152px);
+    --dash-gap: clamp(8px, 1.6vw, 16px);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    gap: var(--dash-gap);
+    max-width: calc(var(--dash-tile-size) * 4 + var(--dash-gap) * 3);
+    margin: 28px auto 0;
+}
+
+.dashboard-grid:has(.mod-tile) .mod-tile {
+    width: var(--dash-tile-size);
+    flex: 0 0 var(--dash-tile-size);
 }
 
 .mod-tile {
     --tile-accent: #94a3b8;
     appearance: none;
     -webkit-appearance: none;
-    width: 100%;
     aspect-ratio: 1 / 1;
     padding: 16px;
     display: flex;
@@ -717,8 +728,8 @@ body.module-open .active-bar {
 
 /* Tablet & Smaller Desktop Screens (<= 1024px) */
 @media (max-width: 1024px) {
-    .dashboard-grid {
-        grid-template-columns: repeat(4, clamp(90px, 15vw, 140px));
+    .dashboard-grid:has(.mod-tile) {
+        --dash-tile-size: clamp(90px, 15vw, 140px);
     }
 }
 
@@ -757,9 +768,9 @@ body.module-open .active-bar {
         font-size: 2.2rem;
     }
 
-    .dashboard-grid {
-        grid-template-columns: repeat(4, clamp(80px, 20vw, 120px));
-        gap: 10px;
+    .dashboard-grid:has(.mod-tile) {
+        --dash-tile-size: clamp(80px, 20vw, 120px);
+        --dash-gap: 10px;
     }
 
     .mod-tile {
@@ -849,9 +860,9 @@ body.module-open .active-bar {
         font-size: 1.8rem;
     }
 
-    .dashboard-grid {
-        grid-template-columns: repeat(4, minmax(0, 88px));
-        gap: 8px;
+    .dashboard-grid:has(.mod-tile) {
+        --dash-tile-size: 88px;
+        --dash-gap: 8px;
     }
 
     .mod-tile {
@@ -975,10 +986,10 @@ body.module-open .active-bar {
         border-radius: clamp(6px, 1.8vw, 8px);
     }
 
-    .dashboard-grid {
+    .dashboard-grid:has(.mod-tile) {
         margin-top: clamp(0.7rem, 4vw, 1.5rem);
-        gap: clamp(0.35rem, 1.8vw, 0.625rem);
-        grid-template-columns: repeat(4, minmax(0, clamp(3.8rem, 20vw, 5.5rem)));
+        --dash-gap: clamp(0.35rem, 1.8vw, 0.625rem);
+        --dash-tile-size: clamp(3.8rem, 20vw, 5.5rem);
     }
 
     .mod-tile {
