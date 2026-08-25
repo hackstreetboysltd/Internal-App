@@ -395,6 +395,12 @@ body {
     padding-bottom: 60px; 
 }
 
+.content-viewport:has(.welcome-screen) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 iframe {
     width: 100%;
     max-width: 1400px;
@@ -417,7 +423,8 @@ iframe {
     margin: 0 auto; /* Center within the block content-viewport container */
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: center;
+    align-items: center;
     gap: 10px;
     padding: 10px;
     z-index: 6;
@@ -457,7 +464,11 @@ iframe {
     grid-template-columns: repeat(4, clamp(96px, 16vw, 152px));
     gap: clamp(8px, 1.6vw, 16px);
     justify-content: center;
-    margin-top: 28px;
+}
+
+/* Center the second row when it has three tiles */
+.dashboard-grid .mod-tile:nth-child(5) {
+    grid-column: 2;
 }
 
 .mod-tile {
@@ -971,7 +982,6 @@ body.module-open .active-bar {
     }
 
     .dashboard-grid {
-        margin-top: clamp(0.7rem, 4vw, 1.5rem);
         gap: clamp(0.35rem, 1.8vw, 0.625rem);
         grid-template-columns: repeat(4, minmax(0, clamp(3.8rem, 20vw, 5.5rem)));
     }

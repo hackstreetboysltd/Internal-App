@@ -201,7 +201,7 @@ export default function AppsClient() {
         if (!name || !desc) return alert("Name and description are required");
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        const list = await get("apps");
+        const list = await get("apps", { admin: false });
         const next = Array.isArray(list) ? list.slice() : [];
         next.push({
             id: nextItemId(),
@@ -228,7 +228,7 @@ export default function AppsClient() {
 
     const deleteApp = async (appId) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        const list = await get("apps");
+        const list = await get("apps", { admin: false });
         const deletedApp = (Array.isArray(list) ? list : []).find((a) => sameId(a.id, appId));
         if (
             !isAdminView
@@ -255,7 +255,7 @@ export default function AppsClient() {
 
     const openEdit = async (appId) => {
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        const list = await get("apps");
+        const list = await get("apps", { admin: false });
         const app = (Array.isArray(list) ? list : []).find((a) => sameId(a.id, appId));
         if (!app) return alert("App not found");
         if (
@@ -282,7 +282,7 @@ export default function AppsClient() {
         if (!name || !desc) return alert("Name and description are required");
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        const list = await get("apps");
+        const list = await get("apps", { admin: false });
         const next = Array.isArray(list) ? list.slice() : [];
         const appIndex = next.findIndex((a) => sameId(a.id, id));
         if (appIndex === -1) return alert("App not found");
