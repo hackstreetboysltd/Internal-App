@@ -539,6 +539,33 @@ iframe {
     color: #f8fafc;
 }
 
+.dashboard-manifesto {
+    width: 100%;
+    max-width: 36rem;
+    margin: 28px auto 0;
+    padding: 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+    text-align: center;
+}
+
+.dashboard-manifesto-block h2 {
+    margin: 0 0 0.45rem;
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+}
+
+.dashboard-manifesto-block p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: rgba(226, 232, 240, 0.88);
+}
+
 .dash-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
