@@ -323,7 +323,6 @@ export default function MessagesClient() {
     useEffect(() => {
         const onHide = () => clearWrapKeyCache();
         window.addEventListener("pagehide", onHide);
-        setLoading(true);
         const seen = new Set();
         const mark = (key) => {
             seen.add(key);

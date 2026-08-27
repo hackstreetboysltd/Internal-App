@@ -141,7 +141,6 @@ export default function AppsClient() {
     }, []);
 
     useEffect(() => {
-        setLoading(true);
         const unsub = watch("apps", (list) => {
             setApps(Array.isArray(list) ? list : []);
             setLoading(false);

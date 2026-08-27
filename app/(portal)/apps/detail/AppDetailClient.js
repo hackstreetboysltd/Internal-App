@@ -112,7 +112,8 @@ export default function AppDetailClient() {
 
     const appId = searchParams.get("id");
 
-    const [loading, setLoading] = useState(true);
+    const [resolvedAppId, setResolvedAppId] = useState(null);
+    const loading = Boolean(appId) && appId !== resolvedAppId;
     const [app, setApp] = useState(null);
     const [notFound, setNotFound] = useState(false);
     const [refreshSpin, setRefreshSpin] = useState(false);
@@ -209,7 +210,7 @@ export default function AppDetailClient() {
     }, []);
 
     const loadAppDetail = useCallback(async () => {
-        setLoading(true);
+        setResolvedAppId(null);
         try {
             const apps = await get("apps");
             const found = (Array.isArray(apps) ? apps : []).find((a) => sameId(a.id, appId));
@@ -231,19 +232,18 @@ export default function AppDetailClient() {
             setApp(null);
             setNotFound(true);
         } finally {
-            setLoading(false);
+            setResolvedAppId(appId);
         }
     }, [appId, loadAssociatedGoals, loadGithubCommits]);
 
     useEffect(() => {
         if (!appId) return undefined;
-        setLoading(true);
         const unsub = watch("apps", (apps) => {
             const found = (Array.isArray(apps) ? apps : []).find((a) => sameId(a.id, appId));
             if (!found) {
                 setApp(null);
                 setNotFound(true);
-                setLoading(false);
+                setResolvedAppId(appId);
                 return;
             }
             setNotFound(false);
@@ -257,13 +257,13 @@ export default function AppDetailClient() {
                 });
                 loadGithubCommits(found);
             }
-            setLoading(false);
+            setResolvedAppId(appId);
         }, {
             onError: (e) => {
                 console.error("Error loading apps:", e);
                 setApp(null);
                 setNotFound(true);
-                setLoading(false);
+                setResolvedAppId(appId);
             },
         });
         return unsub;

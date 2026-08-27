@@ -281,7 +281,6 @@ export default function ProceduresClient() {
     }, []);
 
     useEffect(() => {
-        setLoading(true);
         const unsub = watch("procedures", (list) => {
             setProcedures(Array.isArray(list) ? list : []);
             setLoading(false);

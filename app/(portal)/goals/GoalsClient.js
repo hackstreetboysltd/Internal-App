@@ -214,11 +214,23 @@ export default function GoalsClient() {
     };
     useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-    const [loading, setLoading] = useState(true);
+    const tabParam = searchParams.get("tab");
+    const urlTab = tabParam && HORIZONS.includes(tabParam) ? tabParam : null;
+    const watchEpoch = searchParams.toString();
+
+    const [loadedEpoch, setLoadedEpoch] = useState(null);
+    const loading = loadedEpoch !== watchEpoch;
     const [records, setRecords] = useState([]);
     const [users, setUsers] = useState([]);
     const [apps, setApps] = useState([]);
-    const [appsWatchActive, setAppsWatchActive] = useState(false);
+    const [tagOpen, setTagOpen] = useState(false);
+    const [tagFilter, setTagFilter] = useState("");
+    const [tagSearch, setTagSearch] = useState("");
+    const [appsWatchForced, setAppsWatchForced] = useState(false);
+    const appsWatchActive = appsWatchForced || tagOpen || records.some((record) => {
+        if (record.title && record.title.includes("@")) return true;
+        return (record.goals || []).some((goal) => goal.text && goal.text.includes("@"));
+    });
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -227,21 +239,27 @@ export default function GoalsClient() {
     const [sortDir, setSortDir] = useState("desc");
     const [workspacePage, setWorkspacePage] = useState(1);
     const [currentTab, setCurrentTab] = useState("annual");
+    const [horizon, setHorizon] = useState("annual");
+    const [prevUrlTab, setPrevUrlTab] = useState(urlTab);
+    if (urlTab !== prevUrlTab) {
+        setPrevUrlTab(urlTab);
+        if (urlTab) {
+            setCurrentTab(urlTab);
+            setTimeframe(urlTab);
+            setHorizon(urlTab);
+        }
+    }
     const [adminPage, setAdminPage] = useState(1);
     const [lbPage, setLbPage] = useState(1);
 
     const [unifiedOpen, setUnifiedOpen] = useState(false);
     const [unifiedShown, setUnifiedShown] = useState(false);
     const [editingId, setEditingId] = useState(null);
-    const [horizon, setHorizon] = useState("annual");
     const [draftItems, setDraftItems] = useState([]);
     const [editingKey, setEditingKey] = useState(null);
     const [editText, setEditText] = useState("");
     const [scope, setScope] = useState("personal");
     const [assigneeEmail, setAssigneeEmail] = useState("");
-    const [tagOpen, setTagOpen] = useState(false);
-    const [tagFilter, setTagFilter] = useState("");
-    const [tagSearch, setTagSearch] = useState("");
 
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
@@ -309,17 +327,6 @@ export default function GoalsClient() {
     }, []);
 
     useEffect(() => {
-        if (appsWatchActive) return;
-        const hasMention = records.some((record) => {
-            if (record.title && record.title.includes("@")) return true;
-            return (record.goals || []).some((goal) => goal.text && goal.text.includes("@"));
-        });
-        if (tagOpen || hasMention) {
-            setAppsWatchActive(true);
-        }
-    }, [appsWatchActive, records, tagOpen]);
-
-    useEffect(() => {
         if (!appsWatchActive) return undefined;
         return watch("apps", (d) => {
             const nextApps = Array.isArray(d) ? d.slice() : [];
@@ -329,17 +336,10 @@ export default function GoalsClient() {
     }, [appsWatchActive]);
 
     useEffect(() => {
-        const tabParam = searchParams.get("tab");
-        if (tabParam && HORIZONS.includes(tabParam)) {
-            setCurrentTab(tabParam);
-            setTimeframe(tabParam);
-            setHorizon(tabParam);
-        }
-        setLoading(true);
         const seen = new Set();
         const mark = (key) => {
             seen.add(key);
-            if (seen.size >= 2) setLoading(false);
+            if (seen.size >= 2) setLoadedEpoch(watchEpoch);
         };
         const unsubs = [
             watch("goals", (d) => {
@@ -352,9 +352,9 @@ export default function GoalsClient() {
             }, { onError: () => { setUsers([]); mark("profile"); } }),
         ];
         return () => unsubs.forEach((u) => u());
-    }, [searchParams]);
+    }, [searchParams, watchEpoch]);
 
-    const persistGoals = async (list, { skipReload } = {}) => {
+    const persistGoals = useCallback(async (list, { skipReload } = {}) => {
         try {
             await save("goals", stripTitles(persistableCollection(list)));
             return true;
@@ -367,7 +367,7 @@ export default function GoalsClient() {
             }
             return false;
         }
-    };
+    }, [isAdminView, showAlert]);
 
     const closeModule = () => {
         clearActiveModule();
@@ -454,7 +454,7 @@ export default function GoalsClient() {
         const words = val.split(/\s+/);
         const lastWord = words[words.length - 1] || "";
         if (lastWord.startsWith("@")) {
-            setAppsWatchActive(true);
+            setAppsWatchForced(true);
             setTagOpen(true);
             setTagFilter(lastWord.slice(1));
         } else {
@@ -501,13 +501,21 @@ export default function GoalsClient() {
         openModal(setUnifiedOpen, setUnifiedShown);
     };
 
-    const openUnifiedEdit = (recordId) => {
+    useEffect(() => {
+        if (!unifiedOpen) return;
+        const node = editorRef.current;
+        if (node) node.innerHTML = "";
+    }, [unifiedOpen, editingId]);
+
+    const openUnifiedEdit = useCallback((recordId) => {
         const record = records.find((r) => sameId(r.id, recordId));
         if (!record) return;
         setEditingId(record.id);
         setDraftItems((record.goals || []).map((g) => ({ key: nextDraftKey(), text: g.text })));
         setEditingKey(null);
-        clearEditor();
+        setTagOpen(false);
+        setTagFilter("");
+        setTagSearch("");
         const type = resolveGoalType(record);
         setHorizon(type);
         setCurrentTab(type);
@@ -516,10 +524,15 @@ export default function GoalsClient() {
             setScope(scopeVal);
             const currentEmail = goalEmail(record);
             setAssigneeEmail(currentEmail || "");
-            closeModal(setViewOpen, setViewShown, () => setViewingId(null));
+            setViewShown(false);
+            setTimeout(() => {
+                setViewOpen(false);
+                setViewingId(null);
+            }, 300);
         }
-        openModal(setUnifiedOpen, setUnifiedShown);
-    };
+        setUnifiedOpen(true);
+        setTimeout(() => setUnifiedShown(true), 10);
+    }, [goalEmail, isAdminView, records]);
 
     const closeUnified = () => {
         closeModal(setUnifiedOpen, setUnifiedShown, () => {
@@ -720,8 +733,8 @@ export default function GoalsClient() {
         closeUnified();
     });
 
-    const deleteWorkspaceRecord = async (id) => {
-        const currentActor = actorRef.current || { name: "", email: "" };
+    const deleteWorkspaceRecord = useCallback(async (id) => {
+        const currentActor = actor || { name: "", email: "" };
         const data = cloneRecords(records);
         const item = data.find((r) => sameId(r.id, id));
         if (item && !actorOwns(item)) {
@@ -740,7 +753,7 @@ export default function GoalsClient() {
             module: "Goals",
             excludeEmail: currentActor.email,
         });
-    };
+    }, [actor, actorOwns, persistGoals, records, showAlert, showConfirm]);
 
     const toggleSubGoal = async (recordId, index) => {
         const data = cloneRecords(records);

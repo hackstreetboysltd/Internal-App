@@ -171,7 +171,6 @@ export default function SkillsClient() {
     }, []);
 
     useEffect(() => {
-        setLoading(true);
         const unsub = watch("skills", (list) => {
             setSkills(Array.isArray(list) ? list : []);
             setLoading(false);

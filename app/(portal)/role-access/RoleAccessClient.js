@@ -154,7 +154,6 @@ export default function RoleAccessClient() {
     }, []);
 
     useEffect(() => {
-        setLoading(true);
         const unsub = watch("role_access", (data) => {
             if (Array.isArray(data)) {
                 const allowedRec = data.find((r) => r.id === "allowed");

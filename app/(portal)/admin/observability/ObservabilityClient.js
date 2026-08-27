@@ -86,7 +86,8 @@ export default function ObservabilityClient() {
   const { showGlobalDialog } = useGlobalDialog();
   const roleAdmin = sessionHasAdminRole(session);
   const [listedAdmin, setListedAdmin] = useState(false);
-  const [gateReady, setGateReady] = useState(roleAdmin);
+  const [adminCheckDone, setAdminCheckDone] = useState(false);
+  const gateReady = !ready ? roleAdmin : (roleAdmin || !session?.email || adminCheckDone);
   const isAdmin = roleAdmin || listedAdmin;
 
   const [paused, setPaused] = useState(false);
@@ -121,17 +122,7 @@ export default function ObservabilityClient() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return undefined;
-    if (roleAdmin) {
-      setListedAdmin(false);
-      setGateReady(true);
-      return undefined;
-    }
-    if (!session?.email) {
-      setListedAdmin(false);
-      setGateReady(true);
-      return undefined;
-    }
+    if (!ready || roleAdmin || !session?.email) return undefined;
 
     let cancelled = false;
     (async () => {
@@ -140,7 +131,7 @@ export default function ObservabilityClient() {
         if (cancelled) return;
         if (sessionHasAdminRole(next)) {
           setListedAdmin(false);
-          setGateReady(true);
+          setAdminCheckDone(true);
           return;
         }
         const data = await get("role_access", { admin: false });
@@ -148,12 +139,12 @@ export default function ObservabilityClient() {
         const listed = emailIsListedAdmin(session.email, adminsRecord?.emails);
         if (!cancelled) {
           setListedAdmin(listed);
-          setGateReady(true);
+          setAdminCheckDone(true);
         }
       } catch {
         if (!cancelled) {
           setListedAdmin(false);
-          setGateReady(true);
+          setAdminCheckDone(true);
         }
       }
     })();

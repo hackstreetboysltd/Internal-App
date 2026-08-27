@@ -13,11 +13,7 @@ export default function Dock() {
     const { isAdminView } = useSession();
     const routeActiveKey = moduleKeyFromPath(pathname);
     const [pendingKey, setPendingKey] = useState(null);
-    const activeKey = pendingKey ?? routeActiveKey;
-
-    useEffect(() => {
-        setPendingKey(null);
-    }, [pathname]);
+    const activeKey = pendingKey && pendingKey !== routeActiveKey ? pendingKey : routeActiveKey;
 
     useEffect(() => {
         MODULES.forEach((mod) => {

@@ -127,9 +127,9 @@ export default function CalendarClient() {
     const [events, setEvents] = useState([]);
     const [meetings, setMeetings] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [calYear, setCalYear] = useState(2026);
-    const [calMonth, setCalMonth] = useState(0);
-    const [today, setToday] = useState("");
+    const [calYear, setCalYear] = useState(() => portalDateParts().year);
+    const [calMonth, setCalMonth] = useState(() => portalDateParts().month - 1);
+    const [today, setToday] = useState(() => todayStr());
     const [selectedDateStr, setSelectedDateStr] = useState(null);
     const [dayViewOpen, setDayViewOpen] = useState(false);
     const [showEvents, setShowEvents] = useState(true);
@@ -209,11 +209,6 @@ export default function CalendarClient() {
     }, []);
 
     useEffect(() => {
-        const now = portalDateParts();
-        setCalYear(now.year);
-        setCalMonth(now.month - 1);
-        setToday(todayStr());
-        setLoading(true);
         const seen = new Set();
         const mark = (key) => {
             seen.add(key);
