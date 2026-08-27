@@ -4,6 +4,8 @@ import { getCollection } from "@/lib/portalApi";
 
 export const ITEMS_PER_PAGE = 6;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+/** Keep each request under Vercel’s ~4.5 MB body limit. */
+export const UPLOAD_CHUNK_BYTES = 3 * 1024 * 1024;
 
 export function sameId(a, b) {
     return String(a) === String(b);

@@ -12,6 +12,7 @@ import BusyButton from "@/components/BusyButton";
 import {
     ITEMS_PER_PAGE,
     MAX_FILE_BYTES,
+    UPLOAD_CHUNK_BYTES,
     canManageDocument,
     docIconForName,
     downloadAndOpenDocument,
@@ -253,6 +254,13 @@ function FileDrop({ inputRef, file, dragOver, setDragOver, onFile, stageState, s
 }
 
 function postDocumentBlob(file, { filename, signal, onProgress }) {
+    if (file.size > UPLOAD_CHUNK_BYTES) {
+        return postDocumentBlobChunked(file, { filename, signal, onProgress });
+    }
+    return postDocumentBlobOnce(file, { filename, signal, onProgress });
+}
+
+function postDocumentBlobOnce(file, { filename, signal, onProgress }) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const form = new FormData();
@@ -294,6 +302,115 @@ function postDocumentBlob(file, { filename, signal, onProgress }) {
 
         xhr.send(form);
     });
+}
+
+function postChunkXhr(form, { signal, onProgress }) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", apiPath("/api/documents/files/chunk"));
+        xhr.withCredentials = true;
+        xhr.responseType = "text";
+
+        xhr.upload.onprogress = (event) => {
+            if (!onProgress || !event.lengthComputable || event.total <= 0) return;
+            onProgress(event.loaded, event.total);
+        };
+
+        xhr.onload = () => {
+            let body = null;
+            try { body = JSON.parse(xhr.responseText || "null"); } catch { /* ignore */ }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(body);
+                return;
+            }
+            reject(new Error(body?.error || "Upload failed."));
+        };
+        xhr.onerror = () => reject(new Error("Upload failed."));
+        xhr.onabort = () => {
+            const err = new Error("Aborted");
+            err.name = "AbortError";
+            reject(err);
+        };
+
+        if (signal) {
+            if (signal.aborted) {
+                xhr.abort();
+                return;
+            }
+            signal.addEventListener("abort", () => xhr.abort(), { once: true });
+        }
+
+        xhr.send(form);
+    });
+}
+
+async function postDocumentBlobChunked(file, { filename, signal, onProgress }) {
+    const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_BYTES);
+    let uploadId = null;
+    let completedBytes = 0;
+    let lastBody = null;
+
+    const abortUploadSession = () => {
+        if (!uploadId) return;
+        const id = uploadId;
+        uploadId = null;
+        fetch(`${apiPath("/api/documents/files/chunk")}?uploadId=${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            credentials: "include",
+        }).catch(() => {});
+    };
+
+    if (signal) {
+        if (signal.aborted) {
+            const err = new Error("Aborted");
+            err.name = "AbortError";
+            throw err;
+        }
+        signal.addEventListener("abort", abortUploadSession, { once: true });
+    }
+
+    try {
+        for (let index = 0; index < totalChunks; index += 1) {
+            if (signal?.aborted) {
+                const err = new Error("Aborted");
+                err.name = "AbortError";
+                throw err;
+            }
+
+            const start = index * UPLOAD_CHUNK_BYTES;
+            const end = Math.min(start + UPLOAD_CHUNK_BYTES, file.size);
+            const slice = file.slice(start, end);
+            const form = new FormData();
+            form.append("chunk", slice, file.name || "document");
+            form.append("chunkIndex", String(index));
+            form.append("chunkTotal", String(totalChunks));
+            form.append("filename", filename || file.name || "document");
+            form.append("mimeType", file.type || "");
+            form.append("size", String(file.size));
+            if (uploadId) form.append("uploadId", uploadId);
+
+            const chunkSize = end - start;
+            lastBody = await postChunkXhr(form, {
+                signal,
+                onProgress: (loaded, total) => {
+                    if (!onProgress || !total) return;
+                    const overall = completedBytes + Math.min(loaded, chunkSize);
+                    onProgress(Math.min(100, Math.round((overall / file.size) * 100)));
+                },
+            });
+            uploadId = lastBody?.uploadId || uploadId;
+            completedBytes = end;
+            if (onProgress) onProgress(Math.min(100, Math.round((completedBytes / file.size) * 100)));
+        }
+
+        if (!lastBody?.done || !Array.isArray(lastBody?.files) || !lastBody.files[0]?.id) {
+            throw new Error("Upload failed.");
+        }
+        return lastBody;
+    } catch (err) {
+        if (err?.name !== "AbortError") abortUploadSession();
+        throw err;
+    }
 }
 
 function SaveAsInput({ value, onChange, onSubmit }) {
@@ -645,7 +762,7 @@ export default function DocumentsClient() {
         if (!pickedFile) return alert("Choose a file to upload.");
         if (stageState === "error") return alert("File upload failed. Choose the file again.");
         if (stageState !== "ready" && !stagePromiseRef.current) {
-            return alert("File is still preparing. Wait until it shows Ready.");
+            return alert("File is still uploading. Wait until it shows Ready.");
         }
         const displayName = sanitizeDocumentName(saveAsName) || pickedFile.name || "document";
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -1334,7 +1451,7 @@ export default function DocumentsClient() {
                             busyLabel={
                                 saving
                                     ? "Saving…"
-                                    : (stageProgress > 0 ? `Preparing… ${stageProgress}%` : "Preparing…")
+                                    : (stageProgress > 0 ? `Uploading… ${stageProgress}%` : "Uploading…")
                             }
                             onClick={uploadDocuments}
                             disabled={!pickedFile || stageState !== "ready"}

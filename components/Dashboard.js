@@ -15,6 +15,24 @@ const CARDS = [
     { key: "documents", title: "Documents", icon: "fa-solid fa-file-lines" },
 ];
 
+const CHANNEL_BRIEF = [
+    {
+        key: "mission",
+        label: "Mission",
+        body: "We remove the barriers to software success, becoming the simplest channel every piece of software passes through on its way to success, now and for generations to come.",
+    },
+    {
+        key: "vision",
+        label: "Vision",
+        body: "A world where every software, regardless of budget or reach, finds the people who need it with little to no hassle.",
+    },
+    {
+        key: "goal",
+        label: "Goal",
+        body: "Position ourselves at the center of that flow as the default channel where software easily meets its needs, making it easier to monetize and we earn our share of the value we help create.",
+    },
+];
+
 export default function Dashboard() {
     const router = useRouter();
     const { isAdminView } = useSession();
@@ -50,28 +68,21 @@ export default function Dashboard() {
                     );
                 })}
             </div>
-            <section className="dashboard-manifesto" aria-label="Company direction">
-                <div className="dashboard-manifesto-block">
-                    <h2>Mission</h2>
-                    <p>
-                        We remove the barriers to software success, becoming the simplest channel every piece of software
-                        passes through on its way to success, now and for generations to come.
-                    </p>
-                </div>
-                <div className="dashboard-manifesto-block">
-                    <h2>Vision</h2>
-                    <p>
-                        A world where every software, regardless of budget or reach, finds the people who need it with
-                        little to no hassle.
-                    </p>
-                </div>
-                <div className="dashboard-manifesto-block">
-                    <h2>Goal</h2>
-                    <p>
-                        Position ourselves at the center of that flow as the default channel where software easily meets
-                        its needs, making it easier to monetize and we earn our share of the value we help create.
-                    </p>
-                </div>
+            <section className="channel-brief" aria-label="Company direction">
+                <p className="channel-brief-kicker">The channel</p>
+                <ol className="channel-brief-flow">
+                    {CHANNEL_BRIEF.map((item, index) => (
+                        <li
+                            key={item.key}
+                            className="channel-brief-node"
+                            style={{ "--node-i": index }}
+                        >
+                            <span className="channel-brief-dot" aria-hidden="true" />
+                            <h2 className="channel-brief-label">{item.label}</h2>
+                            <p className="channel-brief-body">{item.body}</p>
+                        </li>
+                    ))}
+                </ol>
             </section>
         </div>
     );

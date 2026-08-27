@@ -539,31 +539,151 @@ iframe {
     color: #f8fafc;
 }
 
-.dashboard-manifesto {
+/* Channel brief: Mission → Vision → Goal as a signal spine under the tiles.
+   Quieter than the module grid; spine encodes the company “flow” metaphor. */
+.channel-brief {
+    --channel-signal: #7dd3fc;
+    --channel-rail: rgba(125, 211, 252, 0.28);
     width: 100%;
-    max-width: 36rem;
-    margin: 28px auto 0;
-    padding: 0 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 1.35rem;
+    max-width: min(52rem, 100%);
+    margin: clamp(22px, 4vw, 36px) auto 0;
+    padding: 0 4px 8px;
+}
+
+.channel-brief-kicker {
+    margin: 0 0 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--channel-signal) 70%, var(--text-muted));
     text-align: center;
 }
 
-.dashboard-manifesto-block h2 {
-    margin: 0 0 0.45rem;
-    font-family: var(--font-heading);
-    font-size: 1.05rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: #f8fafc;
+.channel-brief-flow {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    position: relative;
 }
 
-.dashboard-manifesto-block p {
+.channel-brief-node {
+    position: relative;
+    padding: 0 0 1.15rem 1.35rem;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: channelNodeIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(0.08s + (var(--node-i, 0) * 0.1s));
+}
+
+.channel-brief-node:last-child {
+    padding-bottom: 0;
+}
+
+.channel-brief-node::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 11px;
+    bottom: -2px;
+    width: 1px;
+    background: linear-gradient(
+        180deg,
+        var(--channel-rail) 0%,
+        color-mix(in srgb, var(--channel-rail) 35%, transparent) 100%
+    );
+}
+
+.channel-brief-node:last-child::before {
+    display: none;
+}
+
+.channel-brief-dot {
+    position: absolute;
+    left: 0;
+    top: 0.35rem;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, var(--channel-signal) 75%, white);
+    background: color-mix(in srgb, var(--channel-signal) 18%, #0a0f1d);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--channel-signal) 10%, transparent);
+}
+
+.channel-brief-label {
+    margin: 0 0 0.35rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #e2e8f0;
+}
+
+.channel-brief-body {
     margin: 0;
-    font-size: 0.9rem;
+    max-width: 38rem;
+    font-size: 0.82rem;
     line-height: 1.55;
-    color: rgba(226, 232, 240, 0.88);
+    font-weight: 400;
+    color: var(--text-muted);
+    text-wrap: pretty;
+}
+
+@keyframes channelNodeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (min-width: 720px) {
+    .channel-brief-kicker {
+        text-align: left;
+        margin-bottom: 18px;
+    }
+
+    .channel-brief-flow {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(16px, 2.5vw, 28px);
+        align-items: start;
+    }
+
+    .channel-brief-node {
+        padding: 1.35rem 0 0;
+    }
+
+    .channel-brief-node::before {
+        left: 11px;
+        right: calc(-1 * clamp(16px, 2.5vw, 28px) / 2 - 6px);
+        top: 5px;
+        bottom: auto;
+        width: auto;
+        height: 1px;
+        background: linear-gradient(
+            90deg,
+            var(--channel-rail) 0%,
+            color-mix(in srgb, var(--channel-rail) 40%, transparent) 100%
+        );
+    }
+
+    .channel-brief-node:last-child::before {
+        display: none;
+    }
+
+    .channel-brief-dot {
+        left: 0;
+        top: 0;
+    }
+
+    .channel-brief-body {
+        font-size: 0.84rem;
+        line-height: 1.58;
+    }
 }
 
 .dash-card {
@@ -1130,6 +1250,12 @@ body.module-open .glow-bg {
 
     .glow-bg {
         display: none;
+    }
+
+    .channel-brief-node {
+        opacity: 1;
+        transform: none;
+        animation: none;
     }
 }
 
