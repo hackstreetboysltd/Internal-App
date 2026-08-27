@@ -51,7 +51,7 @@ async function main() {
   const adminSid = await createSession(adminEmail, ["user", "admin"]);
 
   await pool.query(
-    `UPDATE role_access SET emails = $1::jsonb WHERE id = 'admins'`,
+    `UPDATE role_access SET emails = $1::jsonb, updated_at = now() WHERE id = 'admins'`,
     [JSON.stringify([adminEmail])],
   );
 
