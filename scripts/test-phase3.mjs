@@ -84,35 +84,50 @@ async function main() {
   }
   console.log("Postgres collection_items rows:", dbCount.rows[0].n);
 
-  const goalsRes = await fetch(`${BASE}/api/data/goals/`, { headers: { Cookie: `sid=${sid}` } });
-  if (!goalsRes.ok) {
-    throw new Error(`GET goals seed failed: ${goalsRes.status}`);
-  }
-  const goals = await goalsRes.json();
-  if (!Array.isArray(goals) || goals.length === 0) {
-    throw new Error("Goals seed/interceptor did not return data");
-  }
-  console.log("GET goals seed OK, count:", goals.length);
-
-  const victim = goals.find((g) => g.user && String(g.user).toLowerCase() !== "phase 3 tester") || {
+  const ownGoal = {
+    id: "p3-own-goal",
+    user: "Phase 3 Tester",
+    email: "phase3-test@example.com",
+    goals: [{ text: "own goal", done: false }],
+    type: "weekly",
+    periodId: "2026-W01",
+  };
+  const foreignGoal = {
     id: "p3-foreign-goal",
     user: "Someone Else",
     email: "other@example.com",
     goals: [{ text: "secret", done: false }],
+    type: "weekly",
+    periodId: "2026-W01",
   };
-  await pool.query(
-    `INSERT INTO collection_items (collection_name, id, data, author_email)
-     VALUES ('goals', $1, $2::jsonb, $3)
-     ON CONFLICT (collection_name, id) DO UPDATE SET data = EXCLUDED.data, deleted_at = NULL`,
-    [String(victim.id), JSON.stringify(victim), victim.email || "other@example.com"],
-  );
+
+  for (const goal of [ownGoal, foreignGoal]) {
+    await pool.query(
+      `INSERT INTO collection_items (collection_name, id, data, author_email)
+       VALUES ('goals', $1, $2::jsonb, $3)
+       ON CONFLICT (collection_name, id) DO UPDATE SET data = EXCLUDED.data, deleted_at = NULL`,
+      [String(goal.id), JSON.stringify(goal), goal.email],
+    );
+  }
+
+  const goalsRes = await fetch(`${BASE}/api/data/goals/`, { headers: { Cookie: `sid=${sid}` } });
+  if (!goalsRes.ok) {
+    throw new Error(`GET goals failed: ${goalsRes.status}`);
+  }
+  const goals = await goalsRes.json();
+  if (!Array.isArray(goals) || goals.length === 0) {
+    throw new Error("GET goals did not return seeded test data");
+  }
+  console.log("GET goals OK, count:", goals.length);
+
+  const victim = goals.find((g) => String(g.id) === foreignGoal.id);
+  if (!victim) {
+    throw new Error("GET goals did not include foreign test goal");
+  }
 
   const escalated = goals.map((g) =>
     String(g.id) === String(victim.id) ? { ...g, goals: [{ text: "hacked", done: true }] } : g,
   );
-  if (!escalated.some((g) => String(g.id) === String(victim.id))) {
-    escalated.push({ ...victim, goals: [{ text: "hacked", done: true }] });
-  }
 
   const escalateRes = await fetch(`${BASE}/api/data/goals/?admin=1`, {
     method: "PUT",
