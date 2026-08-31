@@ -33,21 +33,9 @@ pids_on_port() {
         fi
     fi
 
-    if [ -z "$found" ] && command -v fuser &> /dev/null; then
-        found=$(fuser "${port}/tcp" 2>/dev/null | tr -cs '0-9' '\n' | grep -E '^[0-9]+$' || true)
-    fi
-
-    if [ -z "$found" ]; then
-        # Last resort: anything bound to the port (may include non-LISTEN).
-        if command -v lsof &> /dev/null; then
-            found=$(lsof -nP -iTCP:"$port" -t 2>/dev/null || true)
-        fi
-    fi
-
     if [ -z "$found" ] && ! command -v ss &> /dev/null \
-        && ! command -v lsof &> /dev/null \
-        && ! command -v fuser &> /dev/null; then
-        echo -e "${YELLOW}Warning: ss/lsof/fuser not found — cannot check port $port.${NC}" >&2
+        && ! command -v lsof &> /dev/null; then
+        echo -e "${YELLOW}Warning: ss/lsof not found — cannot check port $port.${NC}" >&2
         return 0
     fi
 
@@ -123,8 +111,10 @@ ensure_port_free() {
     fi
 
     pids=$(pids_on_port "$port")
-    if [ -n "$pids" ] || port_is_bound "$port"; then
-        echo -e "${RED}Error: could not free port $port (still in use${pids:+ by PID(s): $(echo "$pids" | xargs)}).${NC}"
+    if port_is_bound "$port"; then
+        pid_list=$(echo "$pids" | xargs)
+        echo -e "${RED}Error: could not free port $port (still listening${pid_list:+ on PID(s): $pid_list}).${NC}"
+        echo "Try: ss -ltnp 'sport = :${port}'"
         exit 1
     fi
 
@@ -283,31 +273,87 @@ ensure_env_local() {
     fi
 
     if vercel_linked; then
-        echo -e "${YELLOW}Vercel Production secrets are Sensitive — the CLI cannot read REDIS_URL / DATABASE_URL.${NC}"
-        echo "Local dev uses Docker Postgres + Redis. To use Neon/Upstash locally, paste those URLs into .env.local from the Neon and Upstash dashboards."
+        if needs_local_postgres "$(env_get .env.local DATABASE_URL 2>/dev/null || true)" \
+            || needs_local_redis "$(env_get .env.local REDIS_URL 2>/dev/null || true)"; then
+            echo -e "${YELLOW}Vercel Production secrets are Sensitive — the CLI cannot read REDIS_URL / DATABASE_URL.${NC}"
+            echo "Local dev uses Docker Postgres + Redis. To use Neon/Upstash locally, paste those URLs into .env.local from the Neon and Upstash dashboards."
+        fi
     fi
 }
 
+needs_local_postgres() {
+    local url="$1"
+    case "$url" in
+        *neon.tech*|*supabase.co*) return 1 ;;
+        *localhost*|*127.0.0.1*) return 0 ;;
+        "") return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+needs_local_redis() {
+    local url="$1"
+    case "$url" in
+        redis://localhost*|redis://127.0.0.1*) return 0 ;;
+        "") return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 ensure_env_local
+
+# Prefer IPv4 for Neon/Upstash before migrate and dev server (see package.json dev script).
+DNS_NODE_OPTS="--dns-result-order=ipv4first --no-network-family-autoselection"
+case " ${NODE_OPTIONS:-} " in
+    *" --dns-result-order=ipv4first "*) ;;
+    *)
+        export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }${DNS_NODE_OPTS}"
+        ;;
+esac
+case " ${NODE_OPTIONS:-} " in
+    *" --no-network-family-autoselection "*) ;;
+    *)
+        export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--no-network-family-autoselection"
+        ;;
+esac
 
 if [ ! -d node_modules ]; then
     echo "Installing dependencies..."
     npm install
 fi
 
+DB_URL="${DATABASE_URL:-$(env_get .env.local DATABASE_URL 2>/dev/null || true)}"
+REDIS_URL_VAL="${REDIS_URL:-$(env_get .env.local REDIS_URL 2>/dev/null || true)}"
+
 if command -v docker &> /dev/null && [ -f docker-compose.yml ]; then
-    echo "Starting Postgres + Redis..."
-    docker compose up -d
-    echo "Waiting for Postgres..."
-    for i in $(seq 1 30); do
-        if docker compose exec -T postgres pg_isready -U portal -d portal >/dev/null 2>&1; then
-            break
+    DOCKER_SERVICES=""
+    if needs_local_postgres "$DB_URL"; then
+        DOCKER_SERVICES="postgres"
+    fi
+    if needs_local_redis "$REDIS_URL_VAL"; then
+        DOCKER_SERVICES="${DOCKER_SERVICES:+$DOCKER_SERVICES }redis"
+    fi
+
+    if [ -n "$DOCKER_SERVICES" ]; then
+        echo "Starting local Docker: ${DOCKER_SERVICES}..."
+        docker compose up -d $DOCKER_SERVICES
+        if needs_local_postgres "$DB_URL"; then
+            echo "Waiting for Postgres..."
+            for i in $(seq 1 30); do
+                if docker compose exec -T postgres pg_isready -U portal -d portal >/dev/null 2>&1; then
+                    break
+                fi
+                sleep 1
+            done
         fi
-        sleep 1
-    done
+    else
+        echo "Using remote Postgres/Redis from .env.local — skipping Docker."
+    fi
+
     echo "Running database migrations..."
-    DATABASE_URL="${DATABASE_URL:-$(env_get .env.local DATABASE_URL 2>/dev/null || true)}"
-    DATABASE_URL="${DATABASE_URL:-postgresql://portal:portal@localhost:5432/portal}" npm run migrate
+    DATABASE_URL="${DB_URL:-postgresql://portal:portal@localhost:5433/portal}" npm run migrate
+    echo "Verifying database + Redis connectivity..."
+    npm run verify:local || echo -e "${YELLOW}Warning: verify:local failed — check DATABASE_URL / REDIS_URL and network.${NC}"
 else
     echo -e "${YELLOW}Docker not found — start Postgres/Redis yourself, then run npm run migrate.${NC}"
 fi
@@ -356,23 +402,6 @@ launch_browser_when_ready() {
 }
 
 trap 'kill $(jobs -pr) 2>/dev/null || true' EXIT INT TERM
-
-# Prefer IPv4 and disable Happy Eyeballs dual-stack racing.
-# Broken/partial IPv6 makes Node abort IPv4 early → Google OAuth ETIMEDOUT.
-DNS_NODE_OPTS="--dns-result-order=ipv4first --no-network-family-autoselection"
-case " ${NODE_OPTIONS:-} " in
-    *" --dns-result-order=ipv4first "*) ;;
-    *)
-        export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }${DNS_NODE_OPTS}"
-        ;;
-esac
-# Ensure autoselection is off even if ipv4first was already present.
-case " ${NODE_OPTIONS:-} " in
-    *" --no-network-family-autoselection "*) ;;
-    *)
-        export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--no-network-family-autoselection"
-        ;;
-esac
 
 # Free the app port immediately before bind (after Docker/migrate work).
 ensure_ports_free

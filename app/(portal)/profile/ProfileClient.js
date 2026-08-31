@@ -216,7 +216,7 @@ export default function ProfileClient() {
         setLoading(true);
         try {
             try {
-                let profiles = await get("profile");
+                let profiles = await get("profile", { bypassCache: true });
                 if (!Array.isArray(profiles)) profiles = [];
                 setAllProfiles(profiles);
 

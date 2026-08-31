@@ -10,3 +10,8 @@ if (typeof dns.setDefaultResultOrder === "function") {
 if (typeof net.setDefaultAutoSelectFamily === "function") {
   net.setDefaultAutoSelectFamily(false);
 }
+
+// Some Fedora/resolver setups return SERVFAIL for cloud APIs while public DNS works.
+if (process.env.NODE_ENV !== "production") {
+  dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
+}

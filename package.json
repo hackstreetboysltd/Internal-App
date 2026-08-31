@@ -11,6 +11,7 @@
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f",
     "migrate": "node scripts/pg-migrate.mjs up",
+    "verify:local": "node scripts/verify-local.mjs",
     "migrate:down": "node scripts/pg-migrate.mjs down",
     "migrate:create": "node scripts/pg-migrate.mjs create",
     "migrate:firestore": "node scripts/migrate-firestore-to-pg.mjs",

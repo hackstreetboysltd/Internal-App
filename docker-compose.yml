@@ -2,7 +2,8 @@ services:
   postgres:
     image: postgres:16
     ports:
-      - "5432:5432"
+      # Host 5433 — Fedora/system Postgres often owns 5432 (matches .env.local).
+      - "5433:5432"
     environment:
       POSTGRES_DB: portal
       POSTGRES_USER: portal

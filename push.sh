@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-LIVE_URL="${APP_URL:-https://internal-app-eight.vercel.app/Internal-App/}"
+LIVE_URL="${APP_URL:-https://hackstreetboysltd-internal-app.vercel.app/Internal-App/}"
 
 echo ">> Adding files..."
 git add .
