@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { sendApprovalEmailToUser } from "@/lib/server/notifications/email";
-import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
 import { withApi } from "@/lib/server/withApi";
 
@@ -9,10 +8,6 @@ export const dynamic = "force-dynamic";
 export const POST = withApi(async (request, _routeContext, { session }) => {
   if (!session?.email || !(await isEmailAllowed(session.email))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  if (!effectiveAdminView(request, session)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
   let body;
@@ -30,4 +25,4 @@ export const POST = withApi(async (request, _routeContext, { session }) => {
 
   await sendApprovalEmailToUser(email, name);
   return NextResponse.json({ success: true });
-}, { auth: true, rateLimits: ["ip", "user"] });
+}, { auth: true, admin: true, rateLimits: ["ip", "user"] });

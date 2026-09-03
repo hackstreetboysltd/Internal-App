@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { GOAL_REVIEW_NOT_DONE, resolveGoalReviewStatus } from "@/lib/goalReview";
 import { emailForStoredOwnerName, normalizeEmail } from "@/lib/normalize";
-import { effectiveAdminView } from "@/lib/server/adminRole";
 import { listCollectionItems } from "@/lib/server/collectionsDb";
 import { sendGoalReminderEmail } from "@/lib/server/notifications/email";
 import { linkPathForCollection } from "@/lib/server/notifications/links";
@@ -34,10 +33,6 @@ function resolveOwnerEmail(record, profiles) {
 export const POST = withApi(async (request, _routeContext, { session }) => {
   if (!session?.email || !(await isEmailAllowed(session.email))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  if (!effectiveAdminView(request, session)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
   let body;
@@ -107,4 +102,4 @@ export const POST = withApi(async (request, _routeContext, { session }) => {
   });
 
   return NextResponse.json({ success: true });
-}, { auth: true, rateLimits: ["ip", "user", "write"] });
+}, { auth: true, admin: true, rateLimits: ["ip", "user", "write"] });

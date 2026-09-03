@@ -10,6 +10,7 @@ import { buildRateLimitKey, checkRateLimit } from "@/lib/server/rateLimit";
 import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
 import { dispatchCollectionNotifications } from "@/lib/server/notifications/dispatch";
+import { invalidatePendingApprovalsCache } from "@/lib/server/notifications/pendingApprovals";
 import { withApi } from "@/lib/server/withApi";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,9 @@ export const PUT = withApi(async (request, routeContext, { session }) => {
   }
 
   await replaceCollectionItems(collection, body, session.email, oldCollection);
+  if (collection === "profile") {
+    invalidatePendingApprovalsCache();
+  }
   dispatchCollectionNotifications({
     collectionName: collection,
     oldItems: oldCollection,

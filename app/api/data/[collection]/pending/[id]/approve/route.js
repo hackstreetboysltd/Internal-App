@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { assertValidCollectionName } from "@/lib/server/collectionNames";
-import { effectiveAdminView } from "@/lib/server/adminRole";
 import {
   approvePendingRecord,
   rejectPendingRecord,
@@ -19,9 +18,6 @@ export const dynamic = "force-dynamic";
 async function handlePendingAction(request, routeContext, { session }, action) {
   if (!session?.email || !(await isEmailAllowed(session.email))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!effectiveAdminView(request, session)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
   const { collection, id } = await routeContext.params;
@@ -42,5 +38,5 @@ async function handlePendingAction(request, routeContext, { session }, action) {
 
 export const POST = withApi(
   (request, routeContext, ctx) => handlePendingAction(request, routeContext, ctx, "approve"),
-  { auth: true, rateLimits: ["ip", "user"] },
+  { auth: true, admin: true, rateLimits: ["ip", "user"] },
 );
