@@ -53,11 +53,14 @@ async function sendDirectEmail({ label, creds, toEmail }) {
     template_params: {
       to_email: toEmail,
       actor_name: "Portal Email Test",
-      action: "sent a smoke-test email",
-      item_name: label,
-      module: "System",
+      eyebrow: "SYSTEM",
+      headline: "Portal Email Test sent a smoke-test email.",
+      detail_html: label,
+      note: "",
       timestamp: new Date().toISOString(),
       portal_url: origin,
+      cta_label: "Open Portal",
+      footer: "This is a smoke-test email from the portal.",
       subject: `[Portal Test] ${label}`,
     },
   });

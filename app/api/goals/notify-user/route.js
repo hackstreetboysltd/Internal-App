@@ -86,7 +86,7 @@ export const POST = withApi(async (request, _routeContext, { session }) => {
     kind: "direct",
     module: "Goals",
     action: "sent you a reminder about",
-    itemName: `"${snippet}"`,
+    itemName: snippet,
     actorName,
     actorEmail: session.email,
     targetEmail,
