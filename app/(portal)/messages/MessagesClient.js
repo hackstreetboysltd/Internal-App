@@ -421,6 +421,7 @@ export default function MessagesClient() {
     const saveMessages = async (list) => {
         try {
             await save("messages", persistableCollection(list).filter(isEnvelopeMessage), { admin: false });
+            await loadMessages();
         } catch (e) {
             console.error("Error saving messages:", e);
             alert("Failed to transmit message data to server.");

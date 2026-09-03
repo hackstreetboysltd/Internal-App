@@ -180,6 +180,8 @@ export default function AppsClient() {
     const saveApps = async (list) => {
         try {
             await save("apps", list);
+            const next = await get("apps");
+            setApps(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Error saving apps:", e);
             alert("Failed to save data to physical database server.");

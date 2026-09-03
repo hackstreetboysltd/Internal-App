@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 const {
   assigneeGoalEmailCopy,
   goalReminderEmailCopy,
-  formatGoalsDetailHtml,
   extractGoalTexts,
+  formatGoalsDetailText,
 } = await import(new URL("../lib/server/notifications/emailCopy.js", import.meta.url));
+
+assert.equal(formatGoalsDetailText(["Ship Q3"]), "Ship Q3");
+assert.equal(formatGoalsDetailText(["Ship Q3", "Hire intern"]), "• Ship Q3\n• Hire intern");
 
 const assigned = assigneeGoalEmailCopy({
   actorName: "KakaiK1ng",
@@ -16,10 +19,11 @@ const assigned = assigneeGoalEmailCopy({
 });
 
 assert.equal(assigned.headline, "KakaiK1ng assigned you a goal.");
-assert.equal(assigned.detail_html, "test");
-assert.equal(assigned.action, "");
-assert.equal(assigned.item_name, "");
-assert.match(assigned.subject, /assigned you a goal/);
+assert.equal(assigned.detail_text, "test");
+assert.equal(assigned.show_goal_list, undefined);
+assert.equal(assigned.goals, undefined);
+assert.equal(assigned.action, undefined);
+assert.equal(assigned.item_name, undefined);
 
 const many = assigneeGoalEmailCopy({
   actorName: "KakaiK1ng",
@@ -28,9 +32,7 @@ const many = assigneeGoalEmailCopy({
   portalUrl: "https://example.com",
 });
 assert.equal(many.headline, "KakaiK1ng assigned you these goals.");
-assert.match(many.detail_html, /<ul/);
-assert.match(many.detail_html, /Ship Q3/);
-assert.doesNotMatch(many.detail_html, /&quot;Ship Q3&quot;/);
+assert.equal(many.detail_text, "• Ship Q3\n• Hire intern");
 
 const reminder = goalReminderEmailCopy({
   actorName: "KakaiK1ng",
@@ -40,11 +42,9 @@ const reminder = goalReminderEmailCopy({
   portalUrl: "https://example.com",
 });
 assert.equal(reminder.headline, "KakaiK1ng sent you a reminder about this goal.");
-assert.equal(reminder.detail_html, "test");
+assert.equal(reminder.detail_text, "test");
 assert.equal(reminder.note, "jooh");
-assert.equal(reminder.action, "");
 
 assert.deepEqual(extractGoalTexts([{ text: "  <b>Hi</b>  " }]), ["Hi"]);
-assert.equal(formatGoalsDetailHtml(["one"]), "one");
 
 console.log("email copy assertions passed");

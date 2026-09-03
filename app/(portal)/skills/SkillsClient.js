@@ -186,6 +186,8 @@ export default function SkillsClient() {
     const saveSkills = async (list) => {
         try {
             await save("skills", list);
+            const next = await get("skills");
+            setSkills(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Error saving skills:", e);
             alert("Failed to save skill entry to database.");

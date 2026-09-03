@@ -242,6 +242,8 @@ export default function CalendarClient() {
     const saveEvents = async (list) => {
         try {
             await save("calendar", persistableCollection(list));
+            const next = await get("calendar");
+            setEvents(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Failed database write.", e);
             alert("Failed to save event. Ensure you have an active internet connection.");
@@ -252,6 +254,8 @@ export default function CalendarClient() {
     const saveMeetings = async (list) => {
         try {
             await save("meetings", persistableCollection(list));
+            const next = await get("meetings");
+            setMeetings(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Failed database write.", e);
             alert("Failed to save meetings to physical database server.");

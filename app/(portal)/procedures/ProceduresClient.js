@@ -296,6 +296,8 @@ export default function ProceduresClient() {
     const saveProcedures = async (list) => {
         try {
             await save("procedures", list);
+            const next = await get("procedures");
+            setProcedures(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Error saving procedures:", e);
             alert("Failed to save procedures runbook to database.");

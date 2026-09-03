@@ -360,6 +360,7 @@ export default function GoalsClient() {
     const persistGoals = useCallback(async (list, { skipReload } = {}) => {
         try {
             await save("goals", stripTitles(persistableCollection(list)));
+            if (!skipReload) await loadAll();
             return true;
         } catch (e) {
             console.error("Error saving goals:", e);
@@ -370,7 +371,7 @@ export default function GoalsClient() {
             }
             return false;
         }
-    }, [isAdminView, showAlert]);
+    }, [isAdminView, loadAll, showAlert]);
 
     const closeModule = () => {
         clearActiveModule();

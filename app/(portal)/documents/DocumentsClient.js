@@ -646,6 +646,8 @@ export default function DocumentsClient() {
     const saveDocuments = async (list) => {
         try {
             await save("documents", list);
+            const next = await get("documents");
+            setRecords(Array.isArray(next) ? next : []);
         } catch (e) {
             console.error("Error saving documents:", e);
             alert("Failed to save documents to the database.");

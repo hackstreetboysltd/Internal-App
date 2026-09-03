@@ -55,7 +55,7 @@ async function sendDirectEmail({ label, creds, toEmail }) {
       actor_name: "Portal Email Test",
       eyebrow: "SYSTEM",
       headline: "Portal Email Test sent a smoke-test email.",
-      detail_html: label,
+      detail_text: label,
       note: "",
       timestamp: new Date().toISOString(),
       portal_url: origin,
