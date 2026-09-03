@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { get, save, watch } from "@/lib/portalApi";
-import { sendApprovalEmailToUser } from "@/lib/emailNotify";
+import { sendApprovalEmail } from "@/lib/notificationsClient";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
@@ -424,7 +424,7 @@ export default function ProfileClient() {
                 await save("profile", next);
             }
 
-            await sendApprovalEmailToUser(email, name);
+            await sendApprovalEmail({ email, name });
             await loadProfiles();
             alert(`Access for ${email} approved successfully.`);
         } catch (e) {
@@ -529,7 +529,7 @@ export default function ProfileClient() {
             setAllowedEmails(allowedRec.emails);
 
             if (addNotify) {
-                await sendApprovalEmailToUser(email, name);
+                await sendApprovalEmail({ email, name });
             }
 
             closeAdd();

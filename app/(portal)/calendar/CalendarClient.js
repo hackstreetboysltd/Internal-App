@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { approve, get, getCollection, reject, save, saveCollection, watch } from "@/lib/portalApi";
 import { portalDateParts, portalNowIso } from "@/lib/portalTime";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
@@ -382,13 +381,6 @@ export default function CalendarClient() {
         await saveEvents(list);
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: `${title} (${date})`,
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
         setEvAuthor(""); setEvTitle(""); setEvDate(""); setEvLoc("");
         closeModal(setEventOpen, setEventShown);
     });
@@ -411,13 +403,6 @@ export default function CalendarClient() {
         await saveMeetings(list);
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: `meeting on ${new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
         setMAuthor(""); setMTime(""); setMLink(""); setMAgenda("");
         closeModal(setMeetingOpen, setMeetingShown);
     });
@@ -444,13 +429,6 @@ export default function CalendarClient() {
         item.loc = loc;
         setSelectedDateStr(date);
         await saveEvents(list);
-        notifyTeam({
-            action: "edited",
-            actorName: current.name,
-            itemName: `${title} (${date})`,
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
         closeModal(setEditEventOpen, setEditEventShown);
     });
 
@@ -476,13 +454,6 @@ export default function CalendarClient() {
         item.agenda = agenda;
         setSelectedDateStr(toDateStr(time));
         await saveMeetings(list);
-        notifyTeam({
-            action: "edited",
-            actorName: current.name,
-            itemName: `meeting on ${new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
         closeModal(setEditMeetingOpen, setEditMeetingShown);
     });
 
@@ -504,13 +475,6 @@ export default function CalendarClient() {
         closeModal(setEventDetailOpen, setEventDetailShown, () => setViewingEventId(null));
         if (viewingDocs && sameId(viewingDocs.id, id)) closeModal(setDocsOpen, setDocsShown, () => setViewingDocs(null));
         await saveEvents(filtered);
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: deletedEvent ? `${deletedEvent.title} (${deletedEvent.date})` : "a calendar event",
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
     };
 
     const deleteMeeting = async (id) => {
@@ -531,15 +495,6 @@ export default function CalendarClient() {
         closeModal(setMeetingDetailOpen, setMeetingDetailShown, () => setViewingMeetingId(null));
         if (viewingDocs && sameId(viewingDocs.id, id)) closeModal(setDocsOpen, setDocsShown, () => setViewingDocs(null));
         await saveMeetings(filtered);
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: deletedMeeting
-                ? `meeting on ${new Date(deletedMeeting.time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
-                : "a meeting",
-            module: "Calendar",
-            excludeEmail: current.email,
-        });
     };
 
     const openEditEvent = async (evId) => {
@@ -699,13 +654,6 @@ export default function CalendarClient() {
             });
             if (viewingDocs.kind === "meeting") await saveMeetings(listToSave);
             else await saveEvents(listToSave);
-            notifyTeam({
-                action: "added",
-                actorName: current.name,
-                itemName: `document "${name}" on ${recordTitle({ ...item, kind: viewingDocs.kind })}`,
-                module: "Calendar",
-                excludeEmail: current.email,
-            });
             resetDocForm();
             await loadDocs(viewingDocs.kind, item.id);
         } catch (e) {

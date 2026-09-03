@@ -6,11 +6,11 @@ import Header from "@/components/Header";
 import Dock from "@/components/Dock";
 import FirstTimeSetup from "@/components/FirstTimeSetup";
 import ActivityTrackerBridge from "@/components/ActivityTrackerBridge";
+import NotificationPanel, { useNotificationStream } from "@/components/NotificationPanel";
 import { DialogProvider } from "@/components/GlobalDialog";
 import { PortalDataProvider } from "@/components/PortalDataProvider";
 import { SessionProvider, useSession, clearActiveModule, saveActiveModule, setAdminView } from "@/lib/session";
-import { get, save, watch, setGithubPat } from "@/lib/portalApi";
-import { pausedFromSettings, setEmailNotificationsPaused } from "@/lib/emailNotify";
+import { setGithubPat } from "@/lib/portalApi";
 import { moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
 import { trackActivity } from "@/lib/activityTracker";
 import { isTrustedGithubMessage } from "@/lib/githubMessage";
@@ -22,7 +22,11 @@ function PortalChrome({ children }) {
     const router = useRouter();
     const { isAdminView } = useSession();
     const { adminVisible } = usePortalData();
-    const [paused, setPaused] = useState(false);
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [feedRefresh, setFeedRefresh] = useState(0);
+    const unreadCount = useNotificationStream(() => {
+        setFeedRefresh((value) => value + 1);
+    });
 
     const isDockModule = !!moduleKeyFromPath(pathname);
 
@@ -30,16 +34,6 @@ function PortalChrome({ children }) {
         document.body.classList.toggle("module-open", isDockModule);
         return () => document.body.classList.remove("module-open");
     }, [isDockModule]);
-
-    useEffect(() => {
-        const apply = (data) => {
-            const globalPaused = pausedFromSettings(data);
-            if (globalPaused === null) return;
-            setEmailNotificationsPaused(globalPaused);
-            setPaused(globalPaused);
-        };
-        return watch("settings", apply, { admin: false });
-    }, []);
 
     useEffect(() => {
         const onMessage = (event) => {
@@ -67,31 +61,6 @@ function PortalChrome({ children }) {
         }
     };
 
-    const toggleNotifications = async () => {
-        const nextState = !paused;
-        setEmailNotificationsPaused(nextState);
-        setPaused(nextState);
-        try {
-            let currentSettings = await get("settings", { admin: false });
-            let payload;
-            if (Array.isArray(currentSettings)) {
-                let globalSettings = currentSettings.find((s) => s.id === "global");
-                if (globalSettings) globalSettings.emailNotificationsPaused = nextState;
-                else currentSettings.push({ id: "global", emailNotificationsPaused: nextState });
-                payload = currentSettings;
-            } else if (currentSettings && typeof currentSettings === "object") {
-                currentSettings.emailNotificationsPaused = nextState;
-                currentSettings.id = "global";
-                payload = currentSettings;
-            } else {
-                payload = [{ id: "global", emailNotificationsPaused: nextState }];
-            }
-            await save("settings", payload, { admin: false });
-        } catch {
-            /* local only */
-        }
-    };
-
     const goDashboard = () => {
         trackActivity("nav.home", "/");
         clearActiveModule();
@@ -109,10 +78,15 @@ function PortalChrome({ children }) {
             <Header
                 adminVisible={adminVisible}
                 isAdminView={isAdminView}
-                paused={paused}
+                unreadCount={unreadCount}
+                onOpenNotifications={() => setPanelOpen(true)}
                 onToggleAdmin={toggleAdmin}
-                onToggleNotifications={toggleNotifications}
                 onLogoClick={goDashboard}
+            />
+            <NotificationPanel
+                open={panelOpen}
+                onClose={() => setPanelOpen(false)}
+                refreshToken={feedRefresh}
             />
             <main className="content-viewport">
                 {children}

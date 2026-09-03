@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { nextPortalId } from "@/lib/portalTime";
 import { approve, get, reject, save, watch } from "@/lib/portalApi";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -250,15 +249,6 @@ export default function SkillsClient() {
         next.push({ id: nextItemId(), author, title, body });
         await saveSkills(next);
 
-        const current = actorRef.current || { name: "A Team Member", email: "" };
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: title,
-            module: "Skills",
-            excludeEmail: current.email,
-        });
-
         setContribName("");
         setSkillTitle("");
         setSkillDesc("");
@@ -277,13 +267,6 @@ export default function SkillsClient() {
         const filtered = (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
         if (viewingSkillId === id) closeModal(setDetailOpen, setDetailShown, () => setViewingSkillId(null));
         await saveSkills(filtered);
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: deletedItem ? deletedItem.title : "a skill",
-            module: "Skills",
-            excludeEmail: current.email,
-        });
     };
 
     const openEdit = async (skillId) => {
@@ -322,13 +305,6 @@ export default function SkillsClient() {
             item.title = title;
             item.body = body;
             await saveSkills(next);
-            notifyTeam({
-                action: "edited",
-                actorName: current.name,
-                itemName: title,
-                module: "Skills",
-                excludeEmail: current.email,
-            });
         }
         closeModal(setEditOpen, setEditShown);
     });

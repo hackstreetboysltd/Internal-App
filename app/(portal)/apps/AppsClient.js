@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { get, reject, approve, save, watch } from "@/lib/portalApi";
 import { nextPortalId } from "@/lib/portalTime";
 import { trackActivity } from "@/lib/activityTracker";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
 import RteEditor from "./RteEditor";
+import EditAppFlow from "./EditAppFlow";
 import { getEditorHtml, stripHtml } from "./html";
 
 function nextItemId() {
@@ -80,12 +80,33 @@ function SkelAppCard() {
                 <span className="skel-line w90"></span>
                 <span className="skel-line w70"></span>
             </div>
+            <div className="skel-btn-pair" style={{ marginTop: 8 }}>
+                <span className="skel-btn" style={{ width: 72, height: 28, borderRadius: 6 }}></span>
+                <span className="skel-btn" style={{ width: 72, height: 28, borderRadius: 6 }}></span>
+            </div>
         </div>
     );
 }
 
 function sameId(a, b) {
     return String(a) === String(b);
+}
+
+/** Build a github.com URL from owner/repo or a full URL. */
+function githubRepoHref(repo) {
+    const raw = String(repo || "").trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^github\.com\//i.test(raw)) return `https://${raw}`;
+    return `https://github.com/${raw.replace(/^\/+/, "")}`;
+}
+
+/** Normalize a live/deploy URL; adds https:// when scheme is missing. */
+function liveUrlHref(url) {
+    const raw = String(url || "").trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://${raw}`;
 }
 
 export default function AppsClient() {
@@ -103,18 +124,20 @@ export default function AppsClient() {
     const [registerOpen, setRegisterOpen] = useState(false);
     const [registerShown, setRegisterShown] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
-    const [editShown, setEditShown] = useState(false);
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
 
     const [appName, setAppName] = useState("");
     const [appGithubRepo, setAppGithubRepo] = useState("");
+    const [appLiveUrl, setAppLiveUrl] = useState("");
     const [registerSeed, setRegisterSeed] = useState(0);
     const registerEditorRef = useRef(null);
 
     const [editAppId, setEditAppId] = useState("");
     const [editAppName, setEditAppName] = useState("");
     const [editAppGithubRepo, setEditAppGithubRepo] = useState("");
+    const [editAppLiveUrl, setEditAppLiveUrl] = useState("");
+    const [editOriginal, setEditOriginal] = useState(null);
     const [editSeed, setEditSeed] = useState(0);
     const [editInitialHtml, setEditInitialHtml] = useState("");
     const editEditorRef = useRef(null);
@@ -189,6 +212,7 @@ export default function AppsClient() {
     const openRegister = () => {
         setAppName("");
         setAppGithubRepo("");
+        setAppLiveUrl("");
         setRegisterSeed((n) => n + 1);
         openModal(setRegisterOpen, setRegisterShown);
     };
@@ -197,6 +221,7 @@ export default function AppsClient() {
         const name = appName.trim();
         const desc = getEditorHtml(registerEditorRef.current);
         const githubRepo = appGithubRepo.trim();
+        const liveUrl = appLiveUrl.trim();
         if (!name || !desc) return alert("Name and description are required");
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -208,20 +233,14 @@ export default function AppsClient() {
             desc,
             tickets: [],
             githubRepo: githubRepo || null,
+            liveUrl: liveUrl || null,
             author: current.name,
         });
         await saveApps(next);
 
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: name,
-            module: "Apps",
-            excludeEmail: current.email,
-        });
-
         setAppName("");
         setAppGithubRepo("");
+        setAppLiveUrl("");
         closeModal(setRegisterOpen, setRegisterShown);
     });
 
@@ -242,14 +261,6 @@ export default function AppsClient() {
 
         const filtered = (Array.isArray(list) ? list : []).filter((a) => !sameId(a.id, appId));
         await saveApps(filtered);
-
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: deletedApp ? deletedApp.name : "an app",
-            module: "Apps",
-            excludeEmail: current.email,
-        });
     };
 
     const openEdit = async (appId) => {
@@ -268,9 +279,21 @@ export default function AppsClient() {
         setEditAppId(String(app.id));
         setEditAppName(app.name || "");
         setEditAppGithubRepo(app.githubRepo || "");
+        setEditAppLiveUrl(app.liveUrl || "");
         setEditInitialHtml(app.desc || "");
+        setEditOriginal({
+            name: app.name || "",
+            desc: app.desc || "",
+            githubRepo: app.githubRepo || "",
+            liveUrl: app.liveUrl || "",
+        });
         setEditSeed((n) => n + 1);
-        openModal(setEditOpen, setEditShown);
+        setEditOpen(true);
+    };
+
+    const closeEdit = () => {
+        setEditOpen(false);
+        setEditOriginal(null);
     };
 
     const saveEditApp = () => runFormBusy(async () => {
@@ -278,6 +301,7 @@ export default function AppsClient() {
         const name = editAppName.trim();
         const desc = getEditorHtml(editEditorRef.current);
         const githubRepo = editAppGithubRepo.trim();
+        const liveUrl = editAppLiveUrl.trim();
         if (!name || !desc) return alert("Name and description are required");
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
@@ -297,17 +321,10 @@ export default function AppsClient() {
         next[appIndex].name = name;
         next[appIndex].desc = desc;
         next[appIndex].githubRepo = githubRepo || null;
+        next[appIndex].liveUrl = liveUrl || null;
         await saveApps(next);
 
-        notifyTeam({
-            action: "edited",
-            actorName: current.name,
-            itemName: name,
-            module: "Apps",
-            excludeEmail: current.email,
-        });
-
-        closeModal(setEditOpen, setEditShown);
+        closeEdit();
     });
 
     const approvePending = async (id) => {
@@ -342,6 +359,15 @@ export default function AppsClient() {
             later(() => setRefreshSpin(false), 500);
         }
     };
+
+    useEffect(() => {
+        if (!editOpen) return undefined;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [editOpen]);
 
     const actorName = (actor?.name || "").toLowerCase();
 
@@ -402,6 +428,8 @@ export default function AppsClient() {
                             ) : (
                                 filteredApps.map((app) => {
                                     const isOwner = !app.author || app.author.toLowerCase() === actorName;
+                                    const githubHref = githubRepoHref(app.githubRepo);
+                                    const launchHref = liveUrlHref(app.liveUrl);
                                     return (
                                         <div
                                             key={app.pendingId || app.id}
@@ -466,6 +494,42 @@ export default function AppsClient() {
                                             <p className="app-card-desc">
                                                 {stripHtml(app.desc)}
                                             </p>
+                                            <div className="app-card-links" onClick={(e) => e.stopPropagation()}>
+                                                {githubHref ? (
+                                                    <a
+                                                        className="app-card-link-btn app-card-link-btn--github"
+                                                        href={githubHref}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={`Open ${app.githubRepo} on GitHub`}
+                                                    >
+                                                        <i className="fa-brands fa-github" aria-hidden="true"></i>
+                                                        GitHub
+                                                    </a>
+                                                ) : (
+                                                    <span className="app-card-link-btn app-card-link-btn--disabled" title="No GitHub repo set">
+                                                        <i className="fa-brands fa-github" aria-hidden="true"></i>
+                                                        GitHub
+                                                    </span>
+                                                )}
+                                                {launchHref ? (
+                                                    <a
+                                                        className="app-card-link-btn app-card-link-btn--launch"
+                                                        href={launchHref}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={`Launch ${app.name}`}
+                                                    >
+                                                        <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                                        Launch
+                                                    </a>
+                                                ) : (
+                                                    <span className="app-card-link-btn app-card-link-btn--disabled" title="No live URL set">
+                                                        <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                                        Launch
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })
@@ -496,36 +560,31 @@ export default function AppsClient() {
                         <label htmlFor="appGithubRepo" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>GitHub Repo (optional)</label>
                         <input type="text" id="appGithubRepo" placeholder="e.g. octocat/hello-world" value={appGithubRepo} onChange={(e) => setAppGithubRepo(e.target.value)} />
 
+                        <label htmlFor="appLiveUrl" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>Live URL (optional)</label>
+                        <input type="url" id="appLiveUrl" placeholder="e.g. https://app.example.com" value={appLiveUrl} onChange={(e) => setAppLiveUrl(e.target.value)} />
+
                         <BusyButton type="button" busy={formBusy} busyLabel="Registering…" onClick={addApp}> Register App</BusyButton>
                     </div>
                 </div>
             </ModuleModal>
 
-            <ModuleModal open={editOpen} shown={editShown} onBackdrop={() => closeModal(setEditOpen, setEditShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto" }}>Edit App</h3>
-                        <span className="close-btn" onClick={() => closeModal(setEditOpen, setEditShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <label htmlFor="editAppName" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>App Name</label>
-                        <input type="text" id="editAppName" placeholder="e.g. HR Portal Dashboard" value={editAppName} onChange={(e) => setEditAppName(e.target.value)} required />
-
-                        <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>App Description</label>
-                        <RteEditor
-                            seedKey={editSeed}
-                            initialHtml={editInitialHtml}
-                            placeholder="e.g. Backoffice tool managing employee documents and time-off tracking."
-                            editorRef={editEditorRef}
-                        />
-
-                        <label htmlFor="editAppGithubRepo" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>GitHub Repo (optional)</label>
-                        <input type="text" id="editAppGithubRepo" placeholder="e.g. octocat/hello-world" value={editAppGithubRepo} onChange={(e) => setEditAppGithubRepo(e.target.value)} />
-
-                        <BusyButton type="button" busy={formBusy} busyLabel="Saving…" onClick={saveEditApp}> Save Changes</BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {editOpen ? (
+                <EditAppFlow
+                    appName={editAppName}
+                    setAppName={setEditAppName}
+                    githubRepo={editAppGithubRepo}
+                    setGithubRepo={setEditAppGithubRepo}
+                    liveUrl={editAppLiveUrl}
+                    setLiveUrl={setEditAppLiveUrl}
+                    seedKey={editSeed}
+                    initialHtml={editInitialHtml}
+                    editorRef={editEditorRef}
+                    original={editOriginal}
+                    busy={formBusy}
+                    onClose={closeEdit}
+                    onSave={saveEditApp}
+                />
+            ) : null}
 
             <ModuleModal open={infoOpen} shown={infoShown} onBackdrop={() => closeModal(setInfoOpen, setInfoShown)}>
                 <div className="modal-content">
@@ -548,7 +607,8 @@ export default function AppsClient() {
                             </h4>
                             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 9 }}>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Search registered apps by name or description.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Register a new app with a rich-text description and optional GitHub repo.</span></li>
+                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Register a new app with a rich-text description, optional GitHub repo, and live URL.</span></li>
+                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Open an app&apos;s GitHub repo or live site from the card buttons.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Edit an existing app&apos;s details or delete outdated entries.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Click any app card to open its full detail page with changelogs and tickets.</span></li>
                             </ul>

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { get, GoalUser, save, watch } from "@/lib/portalApi";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -580,14 +579,6 @@ export default function MessagesClient() {
         list.push(record);
         await saveMessages(list);
 
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: "an encrypted message",
-            module: "Messages",
-            excludeEmail: current.email,
-        });
-
         setComposeKey("");
         setComposeKeyShow(false);
         closeModal(setComposeOpen, setComposeShown);
@@ -605,14 +596,6 @@ export default function MessagesClient() {
         if (!confirm("Permanently delete this message from physical server storage?")) return;
         const filtered = keptList.filter((m) => !sameId(m.id, id));
         await saveMessages(filtered);
-
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: "an encrypted message",
-            module: "Messages",
-            excludeEmail: current.email,
-        });
     };
 
     const openEdit = async (msgId) => {
@@ -684,14 +667,6 @@ export default function MessagesClient() {
             if (!item.email) item.email = (current.email || "").trim().toLowerCase();
             if (!item.author) item.author = current.name;
             await saveMessages(list.filter(isEnvelopeMessage));
-
-            notifyTeam({
-                action: "edited",
-                actorName: current.name,
-                itemName: "an encrypted message",
-                module: "Messages",
-                excludeEmail: current.email,
-            });
         }
         closeModal(setEditOpen, setEditShown, () => setEditId(null));
     });

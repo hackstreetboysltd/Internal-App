@@ -13,7 +13,14 @@ const adminBtnBase = {
     border: "1px solid rgba(99, 102, 241, 0.2)",
 };
 
-export default function Header({ adminVisible, isAdminView, paused, onToggleAdmin, onToggleNotifications, onLogoClick }) {
+export default function Header({
+    adminVisible,
+    isAdminView,
+    unreadCount = 0,
+    onOpenNotifications,
+    onToggleAdmin,
+    onLogoClick,
+}) {
     const router = useRouter();
     const pathname = usePathname();
     const { showGlobalDialog } = useGlobalDialog();
@@ -84,18 +91,25 @@ export default function Header({ adminVisible, isAdminView, paused, onToggleAdmi
                 <button
                     id="notificationToggleBtn"
                     type="button"
-                    className="header-icon-btn"
-                    title={paused ? "Notifications: Paused (Click to Resume)" : "Notifications: Active (Click to Pause)"}
+                    className="header-icon-btn notification-bell-btn"
+                    title="Notifications"
+                    aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
                     style={{
-                        background: paused ? "rgba(245, 158, 11, 0.1)" : "rgba(16, 185, 129, 0.1)",
-                        color: paused ? "#f59e0b" : "#10b981",
-                        border: paused ? "1px solid rgba(245, 158, 11, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)",
+                        background: unreadCount > 0 ? "rgba(99, 102, 241, 0.18)" : "rgba(16, 185, 129, 0.1)",
+                        color: unreadCount > 0 ? "#a5b4fc" : "#10b981",
+                        border: unreadCount > 0 ? "1px solid rgba(99, 102, 241, 0.35)" : "1px solid rgba(16, 185, 129, 0.2)",
+                        position: "relative",
                     }}
                     onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.05)"; }}
                     onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-                    onClick={onToggleNotifications}
+                    onClick={onOpenNotifications}
                 >
-                    <i className={paused ? "fa-solid fa-bell-slash" : "fa-solid fa-bell"}></i>
+                    <i className="fa-solid fa-bell"></i>
+                    {unreadCount > 0 ? (
+                        <span className="notification-bell-badge" aria-hidden="true">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                    ) : null}
                 </button>
                 <button
                     type="button"

@@ -255,6 +255,61 @@
     overflow-wrap: anywhere;
 }
 
+.apps-module .app-card-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.apps-module .app-card-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.apps-module .app-card-link-btn--github {
+    color: #e2e8f0;
+    background: rgba(36, 41, 46, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.apps-module .app-card-link-btn--github:hover {
+    background: rgba(48, 54, 61, 0.95);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #fff;
+}
+
+.apps-module .app-card-link-btn--launch {
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.28);
+}
+
+.apps-module .app-card-link-btn--launch:hover {
+    color: #c7d2fe;
+    background: rgba(99, 102, 241, 0.22);
+    border-color: rgba(99, 102, 241, 0.45);
+}
+
+.apps-module .app-card-link-btn--disabled {
+    color: #64748b;
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(255, 255, 255, 0.06);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .apps-module .header-actions .new-app-btn {
     width: auto;
     flex-shrink: 0;
@@ -284,7 +339,7 @@
     background: rgba(15, 23, 42, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.05);
     animation: skeleton-pulse 1.5s ease-in-out infinite;
-    min-height: 132px;
+    min-height: 168px;
 }
 
 .apps-module .skel-app-card:nth-child(2) { animation-delay: 0.1s; }
@@ -574,4 +629,258 @@
 .apps-module .modal-body {
     font-size: 0.93rem;
     line-height: 1.65;
+}
+
+/* Full-screen edit flow (giver-style multi-step) */
+.apps-module .app-edit-flow {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary, #0f172a);
+    animation: appsFadeIn 0.25s ease-out;
+}
+
+.apps-module .app-edit-flow-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 560px;
+    width: 100%;
+    margin: 0 auto;
+    padding: clamp(12px, 3vw, 20px) clamp(16px, 4vw, 24px) 0;
+    box-sizing: border-box;
+    min-height: 0;
+}
+
+.apps-module .app-edit-flow-header {
+    flex-shrink: 0;
+    position: relative;
+    padding-top: 4px;
+}
+
+.apps-module .app-edit-flow-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background 0.2s, color 0.2s;
+}
+
+.apps-module .app-edit-flow-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    transform: none;
+    box-shadow: none;
+}
+
+.apps-module .app-edit-flow-progress {
+    display: flex;
+    gap: 4px;
+    padding-right: 48px;
+}
+
+.apps-module .app-edit-flow-progress-seg {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    transition: background 0.3s ease;
+}
+
+.apps-module .app-edit-flow-progress-seg.active {
+    background: var(--accent);
+}
+
+.apps-module .app-edit-flow-title {
+    margin: 14px 0 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(1.35rem, 4vw, 1.65rem);
+    font-weight: 600;
+    color: white;
+    line-height: 1.25;
+}
+
+.apps-module .app-edit-flow-hint {
+    margin: 6px 0 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.apps-module .app-edit-flow-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-top: 18px;
+    padding-bottom: 12px;
+}
+
+.apps-module .app-edit-flow-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.apps-module .app-edit-field {
+    display: block;
+}
+
+.apps-module .app-edit-field-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.apps-module .app-edit-flow-fields input {
+    margin-bottom: 0;
+}
+
+.apps-module .app-edit-flow-fields .rte-wrapper {
+    margin-bottom: 0;
+}
+
+.apps-module .app-edit-flow-error {
+    margin: 16px 0 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    font-size: 0.88rem;
+}
+
+.apps-module .app-edit-review {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.apps-module .app-edit-preview-card {
+    pointer-events: none;
+}
+
+.apps-module .app-edit-preview-repo {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.apps-module .app-edit-review-details {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.apps-module .app-edit-review-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.apps-module .app-edit-review-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.apps-module .app-edit-review-value {
+    font-size: 0.92rem;
+    color: #e2e8f0;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.apps-module .app-edit-review-row--changed .app-edit-review-value {
+    color: white;
+}
+
+.apps-module .app-edit-review-badge {
+    display: inline-flex;
+    margin-left: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: rgba(99, 102, 241, 0.18);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    vertical-align: middle;
+}
+
+.apps-module .app-edit-flow-footer {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    margin: 0 calc(-1 * clamp(16px, 4vw, 24px));
+    padding-left: clamp(16px, 4vw, 24px);
+    padding-right: clamp(16px, 4vw, 24px);
+}
+
+.apps-module .app-edit-flow-actions {
+    display: flex;
+    gap: 10px;
+    max-width: 560px;
+    margin: 0 auto;
+}
+
+.apps-module .app-edit-flow-back {
+    flex: 1;
+    min-height: 46px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background 0.2s;
+}
+
+.apps-module .app-edit-flow-back:hover {
+    background: rgba(255, 255, 255, 0.09);
+    transform: none;
+    box-shadow: none;
+}
+
+.apps-module .app-edit-flow-primary {
+    min-height: 46px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    width: 100%;
+    font-size: 0.92rem;
+}
+
+.apps-module .app-edit-flow-primary.with-back {
+    flex: 1;
+    width: auto;
 }

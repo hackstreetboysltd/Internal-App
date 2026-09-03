@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { nextPortalId } from "@/lib/portalTime";
 import { approve, get, reject, save, watch } from "@/lib/portalApi";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -374,13 +373,6 @@ export default function ProceduresClient() {
         await saveProcedures(next);
 
         const current = actorRef.current || { name: "A Team Member", email: "" };
-        notifyTeam({
-            action: "added",
-            actorName: current.name,
-            itemName: guideTitle,
-            module: "Procedures",
-            excludeEmail: current.email,
-        });
 
         setAuthor("");
         setTitle("");
@@ -400,13 +392,6 @@ export default function ProceduresClient() {
         const next = (Array.isArray(list) ? list : []).filter((p) => p.id !== id);
         if (viewingId === id) closeModal(setDetailOpen, setDetailShown, () => setViewingId(null));
         await saveProcedures(next);
-        notifyTeam({
-            action: "deleted",
-            actorName: current.name,
-            itemName: deletedItem ? deletedItem.title : "a procedure",
-            module: "Procedures",
-            excludeEmail: current.email,
-        });
     };
 
     const openEdit = async (procId) => {
@@ -445,13 +430,6 @@ export default function ProceduresClient() {
             item.title = guideTitle;
             item.steps = steps;
             await saveProcedures(next);
-            notifyTeam({
-                action: "edited",
-                actorName: current.name,
-                itemName: guideTitle,
-                module: "Procedures",
-                excludeEmail: current.email,
-            });
         }
         closeModal(setEditOpen, setEditShown);
     });

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
-import { notifyAssigneeOfGoal, notifyTeam } from "@/lib/emailNotify";
-import { useSession, clearActiveModule } from "@/lib/session";
+import { apiPath } from "@/lib/apiPath";
+import { useSession, clearActiveModule, getSessionActor } from "@/lib/session";
 import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -12,8 +12,6 @@ import { useBusy } from "@/lib/useBusy";
 import {
     HORIZONS,
     HORIZON_OPTIONS,
-    ITEMS_PER_PAGE,
-    LEADERBOARD_ITEMS_PER_PAGE,
     WORKSPACE_ITEMS_PER_PAGE,
     capitalize,
     cloneRecords,
@@ -37,8 +35,33 @@ import {
     sameId,
     stripTitles,
 } from "./goalsHelpers";
+import {
+    GOAL_REVIEW_NOT_DONE,
+    GOAL_REVIEW_REVIEWED,
+    GOAL_REVIEW_UNDER,
+    applyGoalToggleReview,
+    goalReviewLabel,
+    resolveGoalReviewStatus,
+} from "@/lib/goalReview";
 
 const ACCENT = "#fb7185";
+
+const REVIEW_BADGE_ICON = {
+    not_done: "fa-circle",
+    under_review: "fa-hourglass-half",
+    reviewed: "fa-circle-check",
+};
+
+function GoalReviewBadge({ status }) {
+    const label = goalReviewLabel(status);
+    const icon = REVIEW_BADGE_ICON[status] || REVIEW_BADGE_ICON.not_done;
+    return (
+        <span className={`goal-review-badge is-${status}`} title={label} aria-label={`Status: ${label}`}>
+            <i className={`fa-solid ${icon} goal-review-icon`} aria-hidden="true" />
+            <span className="goal-review-label">{label}</span>
+        </span>
+    );
+}
 const ICON_BTN = {
     background: "none",
     border: "none",
@@ -178,24 +201,6 @@ function WorkspaceSkeleton() {
     );
 }
 
-function AdminSkeleton() {
-    return (
-        <div className="module-skeleton-grid" aria-busy="true" aria-label="Loading goals">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div className="skel-goal-card" key={i}>
-                    <div className="skel-compact-top">
-                        <span className="skel-line w55"></span>
-                        <div className="skel-btn-pair"><span className="skel-btn"></span><span className="skel-btn"></span></div>
-                    </div>
-                    <span className="skel-line sm w70"></span>
-                    <div className="skel-progress"><div className="skel-progress-fill"></div></div>
-                    <span className="skel-line sm w40"></span>
-                </div>
-            ))}
-        </div>
-    );
-}
-
 export default function GoalsClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -235,7 +240,11 @@ export default function GoalsClient() {
 
     const [searchQuery, setSearchQuery] = useState("");
     const [timeframe, setTimeframe] = useState("all");
-    const [memberFilter, setMemberFilter] = useState("all");
+    const [memberFilter, setMemberFilter] = useState(() => {
+        const email = (getSessionActor().email || "").trim().toLowerCase();
+        return email || "all";
+    });
+    const userSetMemberFilter = useRef(false);
     const [sortDir, setSortDir] = useState("desc");
     const [workspacePage, setWorkspacePage] = useState(1);
     const [currentTab, setCurrentTab] = useState("annual");
@@ -249,9 +258,6 @@ export default function GoalsClient() {
             setHorizon(urlTab);
         }
     }
-    const [adminPage, setAdminPage] = useState(1);
-    const [lbPage, setLbPage] = useState(1);
-
     const [unifiedOpen, setUnifiedOpen] = useState(false);
     const [unifiedShown, setUnifiedShown] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -263,19 +269,17 @@ export default function GoalsClient() {
 
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
-    const [aboutOpen, setAboutOpen] = useState(false);
-    const [aboutShown, setAboutShown] = useState(false);
-    const [lbOpen, setLbOpen] = useState(false);
-    const [lbShown, setLbShown] = useState(false);
-    const [viewOpen, setViewOpen] = useState(false);
-    const [viewShown, setViewShown] = useState(false);
-    const [viewingId, setViewingId] = useState(null);
     const [reassignOpen, setReassignOpen] = useState(false);
     const [reassignShown, setReassignShown] = useState(false);
     const [reassigningId, setReassigningId] = useState(null);
     const [reassignFrom, setReassignFrom] = useState("");
     const [reassignTo, setReassignTo] = useState("");
+    const [notifyOpen, setNotifyOpen] = useState(false);
+    const [notifyShown, setNotifyShown] = useState(false);
+    const [notifyTarget, setNotifyTarget] = useState(null);
+    const [notifyMessage, setNotifyMessage] = useState("");
     const { busy: formBusy, runBusy: runFormBusy } = useBusy();
+    const { busy: notifyBusy, runBusy: runNotifyBusy } = useBusy();
 
     const [dialog, setDialog] = useState(null);
     const [dialogShown, setDialogShown] = useState(false);
@@ -309,7 +313,6 @@ export default function GoalsClient() {
 
     const goalEmail = useCallback((record) => GoalUser.resolveEmail(record, users), [users]);
     const actorOwns = useCallback((record) => GoalUser.actorOwnsRecord(record, actor, users), [actor, users]);
-    const actorCanManage = useCallback((record) => GoalUser.actorCanManageRecord(record, actor, users), [actor, users]);
 
     const loadAll = useCallback(async () => {
         try {
@@ -412,10 +415,19 @@ export default function GoalsClient() {
     }, [directory]);
 
     useEffect(() => {
+        if (userSetMemberFilter.current || memberFilter !== "all") return;
+        const email = (actor.email || "").trim().toLowerCase();
+        if (!email || !memberOptions.some((o) => o.value === email)) return;
+        setMemberFilter(email);
+    }, [actor.email, memberFilter, memberOptions]);
+
+    useEffect(() => {
         if (memberFilter === "all" || memberOptions.some((o) => o.value === memberFilter)) return;
+        const selfEmail = (actor.email || "").trim().toLowerCase();
+        if (memberFilter === selfEmail && selfEmail) return;
         const t = setTimeout(() => setMemberFilter("all"), 0);
         return () => clearTimeout(t);
-    }, [memberFilter, memberOptions]);
+    }, [memberFilter, memberOptions, actor.email]);
 
     const horizonOptions = HORIZON_OPTIONS.filter((o) => o.value !== "all");
 
@@ -488,16 +500,15 @@ export default function GoalsClient() {
         setDraftItems([]);
         setEditingKey(null);
         clearEditor();
-        if (isAdminView) {
-            setScope("personal");
-            const emails = directoryEmails(users);
-            setAssigneeEmail(emails[0] || "");
-            openModal(setUnifiedOpen, setUnifiedShown);
-            return;
-        }
         const nextHorizon = timeframe === "all" ? "annual" : timeframe;
         setHorizon(nextHorizon);
         setCurrentTab(nextHorizon);
+        if (isAdminView) {
+            setScope("personal");
+            const emails = directoryEmails(users);
+            const filteredEmail = memberFilter !== "all" ? memberFilter : "";
+            setAssigneeEmail(filteredEmail && emails.includes(filteredEmail) ? filteredEmail : (emails[0] || ""));
+        }
         openModal(setUnifiedOpen, setUnifiedShown);
     };
 
@@ -508,6 +519,7 @@ export default function GoalsClient() {
     }, [unifiedOpen, editingId]);
 
     const openUnifiedEdit = useCallback((recordId) => {
+        if (isAdminView) return;
         const record = records.find((r) => sameId(r.id, recordId));
         if (!record) return;
         setEditingId(record.id);
@@ -519,20 +531,9 @@ export default function GoalsClient() {
         const type = resolveGoalType(record);
         setHorizon(type);
         setCurrentTab(type);
-        if (isAdminView) {
-            const scopeVal = record.scope || "personal";
-            setScope(scopeVal);
-            const currentEmail = goalEmail(record);
-            setAssigneeEmail(currentEmail || "");
-            setViewShown(false);
-            setTimeout(() => {
-                setViewOpen(false);
-                setViewingId(null);
-            }, 300);
-        }
         setUnifiedOpen(true);
         setTimeout(() => setUnifiedShown(true), 10);
-    }, [goalEmail, isAdminView, records]);
+    }, [isAdminView, records]);
 
     const closeUnified = () => {
         closeModal(setUnifiedOpen, setUnifiedShown, () => {
@@ -584,10 +585,7 @@ export default function GoalsClient() {
                     await showAlert("Error", "Goal record not found.");
                     return;
                 }
-                const type = resolveGoalType(record);
                 const originalGoals = record.goals || [];
-                const wasAssigned = !!record.assignedByAdmin;
-                const previousAssigneeEmail = goalEmail(record);
                 record.goals = itemsArray.map((text) => {
                     const match = originalGoals.find((og) => og.text.toLowerCase() === text.toLowerCase());
                     return { text, done: match ? match.done : false };
@@ -609,29 +607,11 @@ export default function GoalsClient() {
                 }
                 const saved = await persistGoals(currentDB);
                 if (!saved) return;
-                const assigneeChanged = isAssigned && (!wasAssigned || previousAssigneeEmail !== targetEmail);
-                if (assigneeChanged) {
-                    notifyAssigneeOfGoal({
-                        assigneeName: targetUser,
-                        assigneeEmail: targetEmail,
-                        actorName: currentActor.name,
-                        goalType: type,
-                        periodId: record.periodId,
-                        action: wasAssigned ? "updated" : "assigned",
-                    });
-                }
-                notifyTeam({
-                    action: "updated",
-                    actorName: currentActor.name,
-                    itemName: `${type} goals (${record.periodId})`,
-                    module: "Goals",
-                    excludeEmail: currentActor.email,
-                });
                 closeUnified();
                 return;
             }
 
-            const periodId = computePeriodId(currentTab);
+            const periodId = computePeriodId(horizon);
             const now = nextItemId();
             const record = {
                 id: now,
@@ -639,9 +619,9 @@ export default function GoalsClient() {
                 user: targetUser,
                 email: targetEmail,
                 goals: itemsArray.map((item) => ({ text: item, done: false })),
-                weekId: currentTab === "weekly" ? periodId : null,
+                weekId: horizon === "weekly" ? periodId : null,
                 periodId,
-                type: currentTab,
+                type: horizon,
                 scope,
             };
             if (isAssigned) {
@@ -652,23 +632,6 @@ export default function GoalsClient() {
             currentDB.push(record);
             const saved = await persistGoals(currentDB);
             if (!saved) return;
-            if (isAssigned) {
-                notifyAssigneeOfGoal({
-                    assigneeName: targetUser,
-                    assigneeEmail: targetEmail,
-                    actorName: currentActor.name,
-                    goalType: currentTab,
-                    periodId: record.periodId,
-                    action: "assigned",
-                });
-            }
-            notifyTeam({
-                action: "added",
-                actorName: currentActor.name,
-                itemName: `${currentTab} goals (${periodId})`,
-                module: "Goals",
-                excludeEmail: currentActor.email,
-            });
             closeUnified();
             return;
         }
@@ -697,13 +660,6 @@ export default function GoalsClient() {
             delete record.title;
             const saved = await persistGoals(currentDB);
             if (!saved) return;
-            notifyTeam({
-                action: "updated",
-                actorName: currentActor.name,
-                itemName: `${record.type} goals (${record.periodId})`,
-                module: "Goals",
-                excludeEmail: currentActor.email,
-            });
             closeUnified();
             return;
         }
@@ -723,18 +679,10 @@ export default function GoalsClient() {
         });
         const saved = await persistGoals(currentDB);
         if (!saved) return;
-        notifyTeam({
-            action: "added",
-            actorName: currentActor.name,
-            itemName: `${horizon} goals (${periodId})`,
-            module: "Goals",
-            excludeEmail: currentActor.email,
-        });
         closeUnified();
     });
 
     const deleteWorkspaceRecord = useCallback(async (id) => {
-        const currentActor = actor || { name: "", email: "" };
         const data = cloneRecords(records);
         const item = data.find((r) => sameId(r.id, id));
         if (item && !actorOwns(item)) {
@@ -746,16 +694,10 @@ export default function GoalsClient() {
         const filtered = data.filter((r) => !sameId(r.id, id));
         const saved = await persistGoals(filtered);
         if (!saved) return;
-        notifyTeam({
-            action: "deleted",
-            actorName: currentActor.name,
-            itemName: item ? `goal entry matching user ${item.user}` : "a goal record",
-            module: "Goals",
-            excludeEmail: currentActor.email,
-        });
-    }, [actor, actorOwns, persistGoals, records, showAlert, showConfirm]);
+    }, [actorOwns, persistGoals, records, showAlert, showConfirm]);
 
     const toggleSubGoal = async (recordId, index) => {
+        if (isAdminView) return;
         const data = cloneRecords(records);
         const item = data.find((r) => sameId(r.id, recordId));
         if (!item) return;
@@ -764,52 +706,76 @@ export default function GoalsClient() {
             return;
         }
         if (!item.goals[index]) return;
-        item.goals[index].done = !item.goals[index].done;
+        const nextDone = !item.goals[index].done;
+        applyGoalToggleReview(item.goals[index], nextDone);
         setRecords(data);
         const saved = await persistGoals(data, { skipReload: true });
         if (!saved) {
-            item.goals[index].done = !item.goals[index].done;
+            applyGoalToggleReview(item.goals[index], !nextDone);
             setRecords(cloneRecords(records));
             await loadAll();
             return;
         }
     };
 
-    const adminToggleGoal = async (recordId, goalIndex) => {
+    const markGoalReviewed = async (recordId, goalIndex) => {
+        if (!confirm("Mark this goal as reviewed?")) return;
         const data = cloneRecords(records);
         const item = data.find((r) => sameId(r.id, recordId));
-        if (!item) return;
-        if (!actorOwns(item)) {
-            alert("Permission Denied: You can only modify your own goals.");
-            return;
-        }
-        if (!item.goals[goalIndex]) return;
-        item.goals[goalIndex].done = !item.goals[goalIndex].done;
-        await persistGoals(data);
+        if (!item?.goals?.[goalIndex]) return;
+        item.goals[goalIndex].done = true;
+        item.goals[goalIndex].reviewStatus = GOAL_REVIEW_REVIEWED;
+        const saved = await persistGoals(data);
+        if (!saved) return;
     };
 
-    const deleteAdminRecord = async (recordId) => {
-        const currentActor = actorRef.current || { name: "A Team Member", email: "" };
-        const data = cloneRecords(records);
-        const deletedRecord = data.find((r) => sameId(r.id, recordId));
-        if (deletedRecord && !actorCanManage(deletedRecord)) {
-            alert("Permission Denied: You can only delete your own goals or goals you assigned.");
+    const plainGoalSnippet = (text) => String(text || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+    const openNotifyUser = (record, goalIndex) => {
+        const goal = record.goals?.[goalIndex];
+        if (!goal) return;
+        const assigneeEmail = goalEmail(record);
+        if (!assigneeEmail) {
+            showAlert("Cannot notify", "No email address is linked to this goal's assignee.");
             return;
         }
-        if (!confirm("Are you sure you want to delete this goals commitment card?")) return;
-        const filtered = data.filter((r) => !sameId(r.id, recordId));
-        if (sameId(viewingId, recordId)) closeModal(setViewOpen, setViewShown, () => setViewingId(null));
-        const saved = await persistGoals(filtered);
-        if (!saved) return;
-        const deletedPeriod = deletedRecord ? (deletedRecord.periodId || deletedRecord.weekId || "Target") : "Target";
-        notifyTeam({
-            action: "deleted",
-            actorName: currentActor.name,
-            itemName: deletedRecord ? `${deletedRecord.user}'s goals (${deletedPeriod})` : "a goals record",
-            module: "Goals",
-            excludeEmail: currentActor.email,
+        setNotifyTarget({
+            recordId: record.id,
+            goalIndex,
+            goalText: plainGoalSnippet(goal.text) || "Untitled goal",
+            assigneeEmail,
         });
+        setNotifyMessage("");
+        openModal(setNotifyOpen, setNotifyShown);
     };
+
+    const sendGoalReminder = () => runNotifyBusy(async () => {
+        if (!notifyTarget) return;
+        try {
+            const res = await fetch(apiPath("/api/goals/notify-user"), {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    recordId: notifyTarget.recordId,
+                    goalIndex: notifyTarget.goalIndex,
+                    message: notifyMessage.trim(),
+                }),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(payload.error || "Failed to send reminder.");
+            }
+            closeModal(setNotifyOpen, setNotifyShown, () => {
+                setNotifyTarget(null);
+                setNotifyMessage("");
+            });
+            await showAlert("Reminder sent", `Notification and email sent to ${notifyTarget.assigneeEmail}.`);
+        } catch (e) {
+            console.error(e);
+            await showAlert("Error", e.message || "Failed to send reminder.");
+        }
+    });
 
     const approvePending = async (id) => {
         if (!confirm("Approve this goals review record?")) return;
@@ -867,9 +833,9 @@ export default function GoalsClient() {
                 return g && g.text && typeof g.text === "string" && g.text.toLowerCase().includes(q);
             });
             if (matchingGoals.length === 0) return;
-            const isOwner = actorOwns(record);
+            const canManage = isAdminView ? false : actorOwns(record);
             matchingGoals.forEach((g) => {
-                rows.push({ record, goal: g, typeLabel, recordEmail, isOwner });
+                rows.push({ record, goal: g, typeLabel, recordEmail, canManage });
             });
         });
         rows.sort((a, b) => {
@@ -885,51 +851,12 @@ export default function GoalsClient() {
             return (a.goal.index || 0) - (b.goal.index || 0);
         });
         return rows;
-    }, [records, sortDir, timeframe, memberFilter, q, goalEmail, actorOwns]);
+    }, [records, sortDir, timeframe, memberFilter, q, goalEmail, actorOwns, isAdminView]);
 
     const wsMaxPage = Math.max(1, Math.ceil(workspaceRows.length / WORKSPACE_ITEMS_PER_PAGE));
     const wsPage = Math.min(Math.max(1, workspacePage), wsMaxPage);
     const wsStart = (wsPage - 1) * WORKSPACE_ITEMS_PER_PAGE;
     const pageRows = workspaceRows.slice(wsStart, wsStart + WORKSPACE_ITEMS_PER_PAGE);
-
-    const adminFiltered = useMemo(() => {
-        return records.filter((record) => {
-            const type = resolveGoalType(record);
-            if (type !== currentTab) return false;
-            const resolvedPeriod = record.periodId || record.weekId || "Target";
-            const capitalizedType = capitalize(type);
-            const userMatch = goalEmail(record).includes(q);
-            const goalMatch = record.goals ? record.goals.some((g) => (g.text || "").toLowerCase().includes(q)) : false;
-            const weekMatch = resolvedPeriod ? String(resolvedPeriod).toLowerCase().includes(q) : false;
-            const typeMatch = capitalizedType ? capitalizedType.toLowerCase().includes(q) : false;
-            const titleMatch = record.title ? record.title.toLowerCase().includes(q) : false;
-            return userMatch || goalMatch || weekMatch || typeMatch || titleMatch;
-        });
-    }, [records, currentTab, q, goalEmail]);
-
-    const adminSorted = useMemo(() => [...adminFiltered].sort((a, b) => b.id - a.id), [adminFiltered]);
-    const adminMaxPage = Math.max(1, Math.ceil(adminSorted.length / ITEMS_PER_PAGE));
-    const aPage = Math.min(Math.max(1, adminPage), adminMaxPage);
-    const aStart = (aPage - 1) * ITEMS_PER_PAGE;
-    const adminPageRows = adminSorted.slice(aStart, aStart + ITEMS_PER_PAGE);
-
-    const leaderboard = useMemo(() => {
-        const userStats = {};
-        records.forEach((r) => {
-            const key = goalEmail(r) || r.user || "unknown";
-            if (!userStats[key]) userStats[key] = { attempted: 0, completed: 0, name: key };
-            userStats[key].attempted += (r.goals || []).length;
-            userStats[key].completed += (r.goals || []).filter((g) => g.done).length;
-        });
-        return Object.entries(userStats).sort((a, b) => b[1].completed - a[1].completed);
-    }, [records, goalEmail]);
-
-    const lbMaxPage = Math.max(1, Math.ceil(leaderboard.length / LEADERBOARD_ITEMS_PER_PAGE));
-    const lPage = Math.min(Math.max(1, lbPage), lbMaxPage);
-    const lbStart = (lPage - 1) * LEADERBOARD_ITEMS_PER_PAGE;
-    const lbRows = leaderboard.slice(lbStart, lbStart + LEADERBOARD_ITEMS_PER_PAGE);
-
-    const viewing = records.find((r) => sameId(r.id, viewingId));
 
     const openReassign = (recordId) => {
         const id = recordId || null;
@@ -953,7 +880,6 @@ export default function GoalsClient() {
             setReassignFrom(fromEmails[0] || "");
             setReassignTo(emails[0] || "");
         }
-        closeModal(setViewOpen, setViewShown, () => setViewingId(null));
         openModal(setReassignOpen, setReassignShown);
     };
 
@@ -1020,7 +946,6 @@ export default function GoalsClient() {
                 : `Reassign ${targets.length} goals from ${fromEmail} to ${toEmail}?`
         );
         if (!confirmed) return;
-        const previousEmails = new Set(targets.map((r) => goalEmail(r)).filter(Boolean));
         targets.forEach((record) => {
             record.user = profileNameForEmail(users, toEmail);
             record.email = toEmail;
@@ -1031,17 +956,6 @@ export default function GoalsClient() {
         });
         const saved = await persistGoals(data);
         if (!saved) return;
-        if (!previousEmails.has(toEmail)) {
-            const sample = targets[0];
-            notifyAssigneeOfGoal({
-                assigneeName: profileNameForEmail(users, toEmail),
-                assigneeEmail: toEmail,
-                actorName: currentActor.name,
-                goalType: targets.length === 1 ? (sample.type || "goal") : `${targets.length} personal`,
-                periodId: targets.length === 1 ? sample.periodId : "",
-                action: "assigned",
-            });
-        }
         closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null));
     });
 
@@ -1066,18 +980,43 @@ export default function GoalsClient() {
     const reassignToOptions = useMemo(() => directoryEmails(users).sort((a, b) => a.localeCompare(b)), [users]);
 
     const unifiedTitle = editingId ? "Edit Goal" : "New Goal";
-    const adminUnifiedTitle = editingId ? `Edit ${capitalize(currentTab)} Goal` : `Set ${capitalize(currentTab)} Goal`;
-    const saveBtnLabel = isAdminView && editingId ? "Save Changes" : "Commit Goal";
+    const saveBtnLabel = editingId ? "Save Changes" : "Commit Goal";
     const assigneeLabel = editingId ? "Reassign Goal To" : "Assign Goal To";
+
+    const buildGoalMenuItems = useCallback((record, goalIndex, goal) => {
+        if (isAdminView) {
+            if (record.pendingId && goalIndex === 0) {
+                return [
+                    { label: "Approve", onClick: () => approvePending(record.pendingId) },
+                    { label: "Reject", onClick: () => rejectPending(record.pendingId), danger: true },
+                ];
+            }
+            if (resolveGoalReviewStatus(goal) === GOAL_REVIEW_UNDER) {
+                return [{ label: "Mark Reviewed", onClick: () => markGoalReviewed(record.id, goalIndex) }];
+            }
+            if (resolveGoalReviewStatus(goal) === GOAL_REVIEW_NOT_DONE) {
+                return [{ label: "Notify User", onClick: () => openNotifyUser(record, goalIndex) }];
+            }
+            return [];
+        }
+        if (!actorOwns(record)) return [];
+        return [
+            { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
+            { label: "Delete", onClick: () => deleteWorkspaceRecord(record.id), danger: true },
+        ];
+    }, [actorOwns, deleteWorkspaceRecord, isAdminView, openUnifiedEdit, showAlert, goalEmail]);
+
     const renderedRows = pageRows.map((row, idx) => {
-        const firstOwnerIdx = pageRows.findIndex((r) => r.record.id === row.record.id && r.isOwner);
-        return { ...row, showActions: row.isOwner && firstOwnerIdx === idx };
+        const menuItems = buildGoalMenuItems(row.record, row.goal.index, row.goal);
+        let showActions = false;
+        if (isAdminView) {
+            showActions = menuItems.length > 0;
+        } else {
+            const firstOwnerIdx = pageRows.findIndex((r) => r.record.id === row.record.id && r.canManage);
+            showActions = menuItems.length > 0 && firstOwnerIdx === idx;
+        }
+        return { ...row, menuItems, showActions };
     });
-    const viewType = viewing ? resolveGoalType(viewing) : "";
-    const viewCompleted = viewing ? (viewing.goals || []).filter((g) => g.done).length : 0;
-    const viewPct = viewing ? Math.round((viewCompleted / ((viewing.goals || []).length || 1)) * 100) : 0;
-    const viewCanReassign = viewing ? (!viewing.pendingId && viewing.scope !== "global") : false;
-    const viewCanManage = viewing ? actorCanManage(viewing) : false;
 
     const mentionsBlock = (
         <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "flex-start" }}>
@@ -1223,225 +1162,110 @@ export default function GoalsClient() {
             <div className="container">
                 <div className="header-container" style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", alignItems: "center", marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16 }}>
                     <div></div>
-                    {isAdminView ? (
-                        <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", alignItems: "center", gap: 10 }}>
-                            Goals
-                            <IconBtn title="About this module" onClick={() => openModal(setAboutOpen, setAboutShown)} style={{ width: "auto", fontSize: "1rem" }} hoverScale={1.15}>
-                                <i className="fa-solid fa-circle-info"></i>
-                            </IconBtn>
-                        </h2>
-                    ) : (
-                        <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            <span>Goals</span>
-                        </h2>
-                    )}
+                    <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                        <span>Goals</span>
+                    </h2>
                     <div className="header-actions-right" style={{ display: "flex", alignItems: "center", gap: 4, justifySelf: "end" }}>
-                        {!isAdminView && (
-                            <IconBtn className="refresh-btn" title="Refresh entries" onClick={handleRefresh}>
-                                <i className={`fa-solid fa-arrows-rotate${refreshSpin ? " fa-spin" : ""}`}></i>
-                            </IconBtn>
-                        )}
+                        <IconBtn className="refresh-btn" title="Refresh entries" onClick={handleRefresh}>
+                            <i className={`fa-solid fa-arrows-rotate${refreshSpin ? " fa-spin" : ""}`}></i>
+                        </IconBtn>
                         <IconBtn className="close-module-btn" title="Close module" onClick={closeModule}>
                             <i className="fa-solid fa-xmark"></i>
                         </IconBtn>
                     </div>
                 </div>
 
-                {isAdminView ? (
+                <div className="workspace-toolbar">
+                    <div className="search-input-wrapper">
+                        <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setWorkspacePage(1); }} />
+                    </div>
+                    <div className="workspace-toolbar-filters">
+                        <button
+                            type="button"
+                            className="sort-created-btn"
+                            title={sortDir === "desc" ? "Newest first" : "Oldest first"}
+                            onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setWorkspacePage(1); }}
+                        >
+                            <i className={`fa-solid ${sortDir === "desc" ? "fa-arrow-down-wide-short" : "fa-arrow-up-wide-short"}`}></i>
+                        </button>
+                        <WorkspaceSelect title="Filter by timeframe" value={timeframe} options={HORIZON_OPTIONS} onChange={(v) => { setTimeframe(v); setWorkspacePage(1); }} />
+                        <WorkspaceSelect title="Filter by team member" value={memberFilter} options={memberOptions} onChange={(v) => { userSetMemberFilter.current = true; setMemberFilter(v); setWorkspacePage(1); }} />
+                    </div>
+                    <button type="button" className="add-goal-btn" onClick={openUnifiedNew}>
+                        <i className="fa-solid fa-plus"></i> New Goal
+                    </button>
+                </div>
+                {loading ? <WorkspaceSkeleton /> : (
                     <>
-                        <div className="header-actions" style={{ marginBottom: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                            <div className="search-input-wrapper" style={{ flex: 1 }}>
-                                <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setAdminPage(1); }} />
-                            </div>
-                            <div className="header-actions-tools">
-                                <button type="button" className="header-actions-icon-btn" onClick={() => openModal(setLbOpen, setLbShown)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="View Leaderboard">
-                                    <i className="fa-solid fa-trophy"></i>
-                                </button>
-                                <button type="button" onClick={() => openReassign(null)} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }} title="Reassign goals to another user">
-                                    <i className="fa-solid fa-user-pen"></i> Reassign
-                                </button>
-                            </div>
-                            <div className="header-actions-primary">
-                                <button type="button" onClick={openUnifiedNew} style={{ width: "auto", padding: "10px 18px", fontSize: "0.9rem", background: ACCENT, borderColor: ACCENT, color: "white" }}>
-                                    <i className="fa-solid fa-plus"></i> New {capitalize(currentTab)} Goal
-                                </button>
-                            </div>
-                        </div>
-                        <div style={{ borderBottom: "1px solid var(--border-color)", marginBottom: 24 }}>
-                            <div className="tabs-container" style={{ borderBottom: "none", marginBottom: 0, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                {HORIZONS.map((tab) => (
-                                    <button key={tab} type="button" className={`tab-btn${currentTab === tab ? " active" : ""}`} onClick={() => { setCurrentTab(tab); setAdminPage(1); }}>
-                                        {capitalize(tab)}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        {loading ? <AdminSkeleton /> : (
-                            <div>
-                                <div className="goalsHistory list-container" style={{ marginBottom: 12 }}>
-                                    {adminSorted.length === 0 ? (
-                                        <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
-                                            <p>{q ? "No commitments match your search query." : "No goals logged yet. Click \"New Goals\" to get started."}</p>
-                                        </div>
-                                    ) : adminPageRows.map((record) => {
-                                        const type = resolveGoalType(record);
-                                        const capitalizedType = capitalize(type);
-                                        const displayTitle = (record.title && record.title.trim()) ? formatGoalText(record.title, apps) : capitalizedType;
-                                        const totalGoalsCount = record.goals.length || 1;
-                                        const completedCount = record.goals.filter((g) => g.done).length;
-                                        const pct = Math.round((completedCount / totalGoalsCount) * 100);
-                                        const isOwner = actorCanManage(record);
-                                        return (
-                                            <div
-                                                key={record.pendingId || record.id}
-                                                className="card accordion-card"
-                                                style={{ cursor: "pointer", border: "1px solid rgba(255, 255, 255, 0.05)", transition: "all 0.2s ease" }}
-                                                onClick={() => { setViewingId(record.id); openModal(setViewOpen, setViewShown); }}
-                                            >
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                                                    <h4 style={{ margin: 0, color: "white", fontSize: "0.95rem", fontWeight: 600 }} dangerouslySetInnerHTML={{ __html: displayTitle }} />
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                                                        {record.pendingId && (
-                                                            <>
-                                                                <button type="button" className="secondary-btn" style={{ padding: "4px 8px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.2)", marginBottom: 0 }} onClick={() => approvePending(record.pendingId)}>Approve</button>
-                                                                <button type="button" className="secondary-btn" style={{ padding: "4px 8px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)", marginBottom: 0 }} onClick={() => rejectPending(record.pendingId)}>Reject</button>
-                                                            </>
-                                                        )}
-                                                        {!record.pendingId && record.scope !== "global" && (
-                                                            <button type="button" className="secondary-btn" title="Reassign to another user" style={{ padding: "2px 6px", fontSize: "0.7rem", width: "auto", borderRadius: 4, background: "rgba(251,113,133,0.1)", color: ACCENT, marginBottom: 0 }} onClick={() => openReassign(record.id)}>
-                                                                <i className="fa-solid fa-user-pen"></i>
-                                                            </button>
-                                                        )}
-                                                        {isOwner && (
-                                                            <ItemMenu
-                                                                items={[
-                                                                    { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
-                                                                    { label: "Delete", onClick: () => deleteAdminRecord(record.id), danger: true },
-                                                                ]}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <p style={{ fontSize: "0.75rem", color: "#9ca3af", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 4 }}>
-                                                    <span>{capitalizedType} • {goalEmail(record) || "Unknown"}</span>
-                                                    {record.pendingId && (
-                                                        record.pendingType === "goals_completed"
-                                                            ? <span style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "1px 4px", borderRadius: 4, fontSize: "0.65rem", fontWeight: "bold", marginLeft: 6 }}>Completed 5 Goals</span>
-                                                            : <span style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", padding: "1px 4px", borderRadius: 4, fontSize: "0.65rem", fontWeight: "bold", marginLeft: 6 }}>Pending Global</span>
-                                                    )}
-                                                </p>
-                                                <div className="infographics-bar" style={{ height: 6, margin: "10px 0" }}>
-                                                    <div className="infographics-fill" style={{ width: `${pct}%` }}></div>
-                                                </div>
-                                                <p style={{ fontSize: "0.75rem", color: "#9ca3af", margin: 0 }}>{completedCount}/{record.goals.length} metrics reached ({pct}%)</p>
+                        <div className="goals-grid">
+                            {workspaceRows.length === 0 ? (
+                                <div className="empty-state"><p>No goals mapped to current workspace filter.</p></div>
+                            ) : renderedRows.map(({ record, goal: g, typeLabel, recordEmail, showActions, canManage, menuItems }) => {
+                                const createdStamp = formatGoalCreatedStamp(record);
+                                const reviewStatus = resolveGoalReviewStatus(g);
+                                const selfEmail = (actor.email || "").trim().toLowerCase();
+                                const normalizedRecordEmail = (recordEmail || "").trim().toLowerCase();
+                                const showAssignee = normalizedRecordEmail && normalizedRecordEmail !== selfEmail;
+                                return (
+                                    <div key={`${record.id}-${g.index}`} className={`workspace-goal-row${showActions ? " has-visible-actions" : ""}`}>
+                                        <input
+                                            type="checkbox"
+                                            className="goal-checkbox"
+                                            checked={!!g.done}
+                                            disabled={isAdminView || !canManage}
+                                            onChange={() => toggleSubGoal(record.id, g.index)}
+                                        />
+                                        <div className="workspace-goal-body">
+                                            <GoalHtml
+                                                className="workspace-goal-text"
+                                                text={g.text}
+                                                apps={apps}
+                                                as="div"
+                                                style={{ color: g.done ? "#6b7280" : "#d1d5db" }}
+                                            />
+                                            <div className="workspace-goal-footer">
+                                                <span className="workspace-goal-footer-meta">
+                                                    <span className="workspace-goal-horizon">{typeLabel}</span>
+                                                    {showAssignee ? (
+                                                        <>
+                                                            <span className="workspace-goal-meta-sep" aria-hidden="true">•</span>
+                                                            <span className="workspace-goal-assignee">{recordEmail || "Unknown"}</span>
+                                                        </>
+                                                    ) : null}
+                                                </span>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                                {adminSorted.length > 0 && (
-                                    <PaginationBar
-                                        start={aStart + 1}
-                                        end={Math.min(aStart + ITEMS_PER_PAGE, adminSorted.length)}
-                                        total={adminSorted.length}
-                                        prevDisabled={aPage === 1}
-                                        nextDisabled={aStart + ITEMS_PER_PAGE >= adminSorted.length}
-                                        onPrev={() => setAdminPage((p) => p - 1)}
-                                        onNext={() => setAdminPage((p) => p + 1)}
-                                    />
-                                )}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        <div className="workspace-toolbar">
-                            <div className="search-input-wrapper">
-                                <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setWorkspacePage(1); }} />
-                            </div>
-                            <div className="workspace-toolbar-filters">
-                                <button
-                                    type="button"
-                                    className="sort-created-btn"
-                                    title={sortDir === "desc" ? "Newest first" : "Oldest first"}
-                                    onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setWorkspacePage(1); }}
-                                >
-                                    <i className={`fa-solid ${sortDir === "desc" ? "fa-arrow-down-wide-short" : "fa-arrow-up-wide-short"}`}></i>
-                                </button>
-                                <WorkspaceSelect title="Filter by timeframe" value={timeframe} options={HORIZON_OPTIONS} onChange={(v) => { setTimeframe(v); setWorkspacePage(1); }} />
-                                <WorkspaceSelect title="Filter by team member" value={memberFilter} options={memberOptions} onChange={(v) => { setMemberFilter(v); setWorkspacePage(1); }} />
-                            </div>
-                            <button type="button" className="add-goal-btn" onClick={openUnifiedNew}>
-                                <i className="fa-solid fa-plus"></i> New Goal
-                            </button>
-                        </div>
-                        {loading ? <WorkspaceSkeleton /> : (
-                            <>
-                                <div className="goals-grid">
-                                    {workspaceRows.length === 0 ? (
-                                        <div className="empty-state"><p>No goals mapped to current workspace filter.</p></div>
-                                    ) : renderedRows.map(({ record, goal: g, typeLabel, recordEmail, showActions, isOwner }) => {
-                                        const createdStamp = formatGoalCreatedStamp(record);
-                                        return (
-                                            <div key={`${record.id}-${g.index}`} className={`workspace-goal-row${showActions ? " has-visible-actions" : ""}`}>
-                                                <input
-                                                    type="checkbox"
-                                                    className="goal-checkbox"
-                                                    checked={!!g.done}
-                                                    disabled={!isOwner}
-                                                    onChange={() => toggleSubGoal(record.id, g.index)}
-                                                />
-                                                <div className="workspace-goal-body">
-                                                    <GoalHtml
-                                                        className="workspace-goal-text"
-                                                        text={g.text}
-                                                        apps={apps}
-                                                        as="div"
-                                                        style={{ textDecoration: g.done ? "line-through" : "none", color: g.done ? "#6b7280" : "#d1d5db" }}
-                                                    />
-                                                    <div className="workspace-goal-footer">
-                                                        <span className="workspace-goal-footer-meta">{typeLabel} • {recordEmail || "Unknown"}</span>
-                                                    </div>
-                                                </div>
-                                                {showActions ? (
-                                                    <div className="workspace-goal-aside">
-                                                        <div className="workspace-goal-actions">
-                                                            <ItemMenu
-                                                                items={[
-                                                                    { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
-                                                                    { label: "Delete", onClick: () => deleteWorkspaceRecord(record.id), danger: true },
-                                                                ]}
-                                                            />
-                                                        </div>
-                                                        {createdStamp.time ? (
-                                                            <div className="goal-created-stamp" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
-                                                                <span className="goal-created-time">{createdStamp.time}</span>
-                                                                <span className="goal-created-date">{createdStamp.date}</span>
-                                                            </div>
-                                                        ) : null}
-                                                    </div>
-                                                ) : createdStamp.time ? (
-                                                    <div className="goal-created-stamp is-overlay" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
+                                        </div>
+                                        <div className="workspace-goal-trailing">
+                                            <div className="workspace-goal-status">
+                                                <GoalReviewBadge status={reviewStatus} />
+                                                {createdStamp.time ? (
+                                                    <div className="goal-created-stamp" title={`Created ${createdStamp.time} ${createdStamp.date}`}>
                                                         <span className="goal-created-time">{createdStamp.time}</span>
                                                         <span className="goal-created-date">{createdStamp.date}</span>
                                                     </div>
                                                 ) : null}
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                                {workspaceRows.length > 0 && (
-                                    <PaginationBar
-                                        compact
-                                        start={wsStart + 1}
-                                        end={Math.min(wsStart + WORKSPACE_ITEMS_PER_PAGE, workspaceRows.length)}
-                                        total={workspaceRows.length}
-                                        prevDisabled={wsPage === 1}
-                                        nextDisabled={wsStart + WORKSPACE_ITEMS_PER_PAGE >= workspaceRows.length}
-                                        onPrev={() => setWorkspacePage((p) => p - 1)}
-                                        onNext={() => setWorkspacePage((p) => p + 1)}
-                                    />
-                                )}
-                            </>
+                                            {showActions ? (
+                                                <div className="workspace-goal-actions">
+                                                    <ItemMenu items={menuItems} />
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {workspaceRows.length > 0 && (
+                            <PaginationBar
+                                compact
+                                start={wsStart + 1}
+                                end={Math.min(wsStart + WORKSPACE_ITEMS_PER_PAGE, workspaceRows.length)}
+                                total={workspaceRows.length}
+                                prevDisabled={wsPage === 1}
+                                nextDisabled={wsStart + WORKSPACE_ITEMS_PER_PAGE >= workspaceRows.length}
+                                onPrev={() => setWorkspacePage((p) => p - 1)}
+                                onNext={() => setWorkspacePage((p) => p + 1)}
+                            />
                         )}
                     </>
                 )}
@@ -1450,18 +1274,14 @@ export default function GoalsClient() {
             <ModuleModal open={unifiedOpen} shown={unifiedShown} onBackdrop={closeUnified}>
                 <div className={`modal-content${isAdminView ? " admin-modal" : ""}`}>
                     <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: ACCENT }}>{isAdminView ? adminUnifiedTitle : unifiedTitle}</h3>
+                        <h3 style={{ margin: "0 auto", color: ACCENT }}>{unifiedTitle}</h3>
                         <span className="close-btn" onClick={closeUnified}>&times;</span>
                     </div>
                     <div className="modal-body">
-                        {!isAdminView && (
-                            <>
-                                <label htmlFor="goalHorizonSelect" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>Goal Horizon</label>
-                                <WorkspaceSelect full value={horizon} options={horizonOptions} onChange={(v) => { setHorizon(v); setCurrentTab(v); }} />
-                            </>
-                        )}
+                        <label htmlFor="goalHorizonSelect" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>Goal Horizon</label>
+                        <WorkspaceSelect full value={horizon} options={horizonOptions} onChange={(v) => { setHorizon(v); setCurrentTab(v); }} />
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                            <label style={{ fontSize: "0.85rem", color: "#9ca3af", marginBottom: 0 }}>{itemsLabelForType(isAdminView ? currentTab : horizon)}</label>
+                            <label style={{ fontSize: "0.85rem", color: "#9ca3af", marginBottom: 0 }}>{itemsLabelForType(horizon)}</label>
                             <IconBtn title="View goal requirements" onClick={() => openModal(setInfoOpen, setInfoShown)} style={{ width: "auto", fontSize: "0.95rem", opacity: 0.8 }} hoverScale={1.15}>
                                 <i className="fa-solid fa-circle-info"></i>
                             </IconBtn>
@@ -1501,129 +1321,6 @@ export default function GoalsClient() {
 
             {validationModal}
 
-            <ModuleModal open={aboutOpen} shown={aboutShown} onBackdrop={() => closeModal(setAboutOpen, setAboutShown)}>
-                <div className="modal-content admin-modal">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", display: "flex", alignItems: "center", gap: 8 }}>
-                            <i className="fa-solid fa-circle-info" style={{ color: ACCENT }}></i> Weekly Goals
-                        </h3>
-                        <span className="close-btn" onClick={() => closeModal(setAboutOpen, setAboutShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body" style={{ fontSize: "0.93rem", lineHeight: 1.65, color: "#9ca3af" }}>
-                        <div style={{ marginBottom: 20 }}>
-                            <h4 style={{ color: ACCENT, margin: "0 0 8px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: 7 }}><i className="fa-solid fa-bullseye"></i> About this Module</h4>
-                            <p style={{ margin: 0 }}>A weekly objectives planner designed to align team performance and track execution progress. Each team member commits exactly 5 goals at the start of every week.</p>
-                        </div>
-                        <div>
-                            <h4 style={{ color: ACCENT, margin: "0 0 10px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: 7 }}><i className="fa-solid fa-list-check"></i> Key Actions</h4>
-                            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 9 }}>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: ACCENT, marginTop: 3, flexShrink: 0 }}></i><span>Set exactly 5 personal goals for the current week.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: ACCENT, marginTop: 3, flexShrink: 0 }}></i><span>Check off completed goals to update your progress bar.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: ACCENT, marginTop: 3, flexShrink: 0 }}></i><span>Search and review team commitments by user or week.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: ACCENT, marginTop: 3, flexShrink: 0 }}></i><span>View the leaderboard to see the top-performing teammates.</span></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </ModuleModal>
-
-            <ModuleModal open={lbOpen} shown={lbShown} onBackdrop={() => closeModal(setLbOpen, setLbShown)}>
-                <div className="modal-content admin-modal">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: ACCENT }}> Leaderboard</h3>
-                        <span className="close-btn" onClick={() => closeModal(setLbOpen, setLbShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {leaderboard.length === 0 ? (
-                                <p style={{ fontSize: "0.9rem", color: "#6b7280", fontStyle: "italic", margin: 0, textAlign: "center" }}>No data logged</p>
-                            ) : lbRows.map(([username, stats], relativeIdx) => {
-                                const absoluteIdx = lbStart + relativeIdx;
-                                const pct = Math.round((stats.completed / stats.attempted) * 100 || 0);
-                                const rankBadge = absoluteIdx > 2
-                                    ? <span style={{ color: "#6b7280", fontWeight: "bold", fontSize: "0.9rem", width: 16, textAlign: "center", display: "inline-block" }}>{absoluteIdx + 1}</span>
-                                    : null;
-                                return (
-                                    <div key={username} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "rgba(0,0,0,0.15)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.03)" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                            {rankBadge}
-                                            <strong style={{ color: "white", fontSize: "0.95rem" }}>{stats.name || username}</strong>
-                                        </div>
-                                        <div style={{ textAlign: "right" }}>
-                                            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#10b981" }}>{pct}% Met</div>
-                                            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>{stats.completed}/{stats.attempted} goals</div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        {leaderboard.length > 0 && (
-                            <PaginationBar
-                                start={lbStart + 1}
-                                end={Math.min(lbStart + LEADERBOARD_ITEMS_PER_PAGE, leaderboard.length)}
-                                total={leaderboard.length}
-                                prevDisabled={lPage === 1}
-                                nextDisabled={lbStart + LEADERBOARD_ITEMS_PER_PAGE >= leaderboard.length}
-                                onPrev={() => setLbPage((p) => p - 1)}
-                                onNext={() => setLbPage((p) => p + 1)}
-                            />
-                        )}
-                    </div>
-                </div>
-            </ModuleModal>
-
-            <ModuleModal open={viewOpen} shown={viewShown} onBackdrop={() => closeModal(setViewOpen, setViewShown, () => setViewingId(null))}>
-                <div className="modal-content admin-modal">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: ACCENT }}> {viewing ? `${goalEmail(viewing) || "Unknown"}'s Goals` : " Weekly Goals"}</h3>
-                        <span className="close-btn" onClick={() => closeModal(setViewOpen, setViewShown, () => setViewingId(null))}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        {viewing && (
-                            <>
-                                <div style={{ marginBottom: 12 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "#cbd5e1", marginBottom: 6, alignItems: "center" }}>
-                                        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                            <span>{capitalize(viewType)} • {goalEmail(viewing) || "Unknown"}</span>
-                                            {viewing.pendingId && (
-                                                viewing.pendingType === "goals_completed"
-                                                    ? <span style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "1px 4px", borderRadius: 4, fontSize: "0.65rem", fontWeight: "bold", marginLeft: 6 }}>Completed 5 Goals</span>
-                                                    : <span style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", padding: "1px 4px", borderRadius: 4, fontSize: "0.65rem", fontWeight: "bold", marginLeft: 6 }}>Pending Global</span>
-                                            )}
-                                        </span>
-                                        <span><strong>{viewCompleted} of {(viewing.goals || []).length} completed ({viewPct}%)</strong></span>
-                                    </div>
-                                    {viewing.title ? <div style={{ fontSize: "0.9rem", color: "#cbd5e1", fontWeight: 500, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: formatGoalText(viewing.title, apps) }} /> : null}
-                                    <div className="infographics-bar" style={{ margin: "4px 0", height: 8 }}>
-                                        <div className="infographics-fill" style={{ width: `${viewPct}%` }}></div>
-                                    </div>
-                                    {viewCanReassign && (
-                                        <button type="button" className="secondary-btn" title="Reassign to another user" style={{ padding: "4px 8px", fontSize: "0.75rem", width: "auto", borderRadius: 4, background: "rgba(251,113,133,0.1)", color: ACCENT, margin: "8px 0 0 0" }} onClick={() => openReassign(viewing.id)}>
-                                            <i className="fa-solid fa-user-pen"></i> Reassign
-                                        </button>
-                                    )}
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {(viewing.goals || []).map((g, idx) => (
-                                        <div key={idx} className="goal-item-row" style={{ marginBottom: 4, padding: "10px 12px", display: "flex", alignItems: "center" }}>
-                                            <input
-                                                type="checkbox"
-                                                className="goal-checkbox compact"
-                                                style={{ width: 16, height: 16, marginRight: 12 }}
-                                                checked={!!g.done}
-                                                disabled={!viewCanManage}
-                                                onChange={() => adminToggleGoal(viewing.id, idx)}
-                                            />
-                                            <GoalHtml as="span" text={g.text} apps={apps} style={{ fontSize: "0.9rem", transition: "all 0.2s", textDecoration: g.done ? "line-through" : "none", color: g.done ? "#6b7280" : "#d1d5db" }} />
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </ModuleModal>
-
             <ModuleModal open={reassignOpen} shown={reassignShown} onBackdrop={() => closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null))}>
                 <div className="modal-content admin-modal" style={{ maxWidth: 420 }}>
                     <div className="modal-header">
@@ -1650,6 +1347,52 @@ export default function GoalsClient() {
                         <p style={{ fontSize: "0.85rem", color: "#cbd5e1", lineHeight: 1.5, margin: "0 0 16px 0" }}>{reassignPreview}</p>
                         <BusyButton type="button" busy={formBusy} busyLabel="Reassigning…" onClick={confirmReassignGoals} style={{ background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%", marginBottom: 0 }}>
                             Reassign
+                        </BusyButton>
+                    </div>
+                </div>
+            </ModuleModal>
+
+            <ModuleModal open={notifyOpen} shown={notifyShown} onBackdrop={() => closeModal(setNotifyOpen, setNotifyShown, () => { setNotifyTarget(null); setNotifyMessage(""); })}>
+                <div className="modal-content admin-modal goal-notify-modal" style={{ maxWidth: 480 }}>
+                    <div className="modal-header">
+                        <h3 style={{ margin: "0 auto", display: "flex", alignItems: "center", gap: 8, color: ACCENT }}>
+                            <i className="fa-solid fa-bell"></i> Notify User
+                        </h3>
+                        <span className="close-btn" onClick={() => closeModal(setNotifyOpen, setNotifyShown, () => { setNotifyTarget(null); setNotifyMessage(""); })}>&times;</span>
+                    </div>
+                    <div className="modal-body">
+                        {notifyTarget ? (
+                            <>
+                                <p className="goal-notify-intro">
+                                    Send an in-app notification and email to <strong>{notifyTarget.assigneeEmail}</strong> about this incomplete goal.
+                                </p>
+                                <div className="goal-notify-goal-preview">{notifyTarget.goalText}</div>
+                                <label className="goal-notify-label" htmlFor="goalNotifyMessage">
+                                    Custom message <span className="goal-notify-optional">(optional)</span>
+                                </label>
+                                <textarea
+                                    id="goalNotifyMessage"
+                                    className="goal-notify-textarea"
+                                    rows={4}
+                                    maxLength={2000}
+                                    placeholder="Leave blank to use the default reminder template."
+                                    value={notifyMessage}
+                                    onChange={(e) => setNotifyMessage(e.target.value)}
+                                />
+                                <p className="goal-notify-hint">
+                                    If left empty, they will receive a generic reminder to complete the goal above.
+                                </p>
+                            </>
+                        ) : null}
+                        <BusyButton
+                            type="button"
+                            busy={notifyBusy}
+                            busyLabel="Sending…"
+                            onClick={sendGoalReminder}
+                            disabled={!notifyTarget}
+                            style={{ background: ACCENT, borderColor: ACCENT, fontWeight: 600, width: "100%", marginBottom: 0 }}
+                        >
+                            Send Reminder
                         </BusyButton>
                     </div>
                 </div>

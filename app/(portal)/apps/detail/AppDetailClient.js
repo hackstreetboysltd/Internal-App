@@ -388,18 +388,18 @@ export default function AppDetailClient() {
             <div className="container">
                 <div
                     className="header-container"
-                    style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", alignItems: "center", marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16 }}
+                    style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16 }}
                 >
                     <a
                         href="/Internal-App/apps/"
                         className="back-link"
                         title="Back to directory"
-                        style={{ color: "var(--text-secondary)", fontSize: "1.25rem", display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", transition: "color 0.2s", marginBottom: 0 }}
+                        style={{ color: "var(--text-secondary)", fontSize: "1.25rem", display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", transition: "color 0.2s", marginBottom: 0, justifySelf: "start" }}
                         onClick={(e) => { e.preventDefault(); goBackToApps(); }}
                     >
                         <i className="fa-solid fa-arrow-left"></i>
                     </a>
-                    <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", alignItems: "center", gap: 10 }}>
+                    <h2 style={{ margin: 0, borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", textAlign: "center" }}>
                         {loading ? "Loading..." : (app?.name || "Loading...")}
                     </h2>
                     <div className="header-actions-right" style={{ display: "flex", alignItems: "center", gap: 4, justifySelf: "end" }}>

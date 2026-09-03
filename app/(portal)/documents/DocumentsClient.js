@@ -4,7 +4,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useRouter } from "next/navigation";
 import { apiPath } from "@/lib/apiPath";
 import { get, getCollection, save, saveCollection, watch } from "@/lib/portalApi";
-import { notifyTeam } from "@/lib/emailNotify";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { nextPortalId, portalNowIso } from "@/lib/portalTime";
 import ItemMenu from "@/components/ItemMenu";
@@ -801,13 +800,6 @@ export default function DocumentsClient() {
                 size: file.size,
             });
             await saveDocuments(list);
-            notifyTeam({
-                action: "added",
-                actorName: current.name,
-                itemName: displayName,
-                module: "Documents",
-                excludeEmail: current.email,
-            });
             releaseStagedUpload();
             setPickedFile(null);
             setSaveAsName("");
@@ -887,13 +879,6 @@ export default function DocumentsClient() {
                     await saveCollection(filesCollectionName(parent.id), payloads);
                     await saveDocuments(removeDocumentFromGroups(list, doc.id));
                 }
-                notifyTeam({
-                    action: "deleted",
-                    actorName: current.name,
-                    itemName: doc.name || "a document",
-                    module: "Documents",
-                    excludeEmail: current.email,
-                });
             },
         });
     };
@@ -1038,13 +1023,6 @@ export default function DocumentsClient() {
                 owned.name = name;
                 owned.documents = [...(Array.isArray(owned.documents) ? owned.documents : []), ...newSnaps];
                 await saveDocuments(list);
-                notifyTeam({
-                    action: "updated",
-                    actorName: current.name,
-                    itemName: name,
-                    module: "Documents",
-                    excludeEmail: current.email,
-                });
             } else {
                 const alreadyGrouped = groupedDocumentIds(list);
                 const snaps = [];
@@ -1065,13 +1043,6 @@ export default function DocumentsClient() {
                     documents: snaps,
                 });
                 await saveDocuments(list);
-                notifyTeam({
-                    action: "added",
-                    actorName: current.name,
-                    itemName: name,
-                    module: "Documents",
-                    excludeEmail: current.email,
-                });
             }
 
             exitGrouping();
@@ -1142,13 +1113,6 @@ export default function DocumentsClient() {
             onConfirm: async () => {
                 const list = persistableCollection(await get("documents"));
                 await saveDocuments(list.filter((item) => !sameId(item.id, group.id)));
-                notifyTeam({
-                    action: "deleted",
-                    actorName: current.name,
-                    itemName: group.name || "a group",
-                    module: "Documents",
-                    excludeEmail: current.email,
-                });
                 if (viewingGroup && sameId(viewingGroup.id, group.id)) closeGroupView();
             },
         });

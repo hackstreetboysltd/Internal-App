@@ -2,11 +2,10 @@
     position: relative;
     display: inline-flex;
     flex-shrink: 0;
-    z-index: 2;
 }
 
 .item-menu.is-open {
-    z-index: 40;
+    z-index: 1100;
 }
 
 .item-menu button.item-menu-btn {
@@ -39,9 +38,7 @@
     transform: none;
 }
 
-.item-menu .item-menu-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
+.item-menu-dropdown {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -52,22 +49,16 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
-    z-index: 50;
     text-align: center;
     white-space: nowrap;
 }
 
-.item-menu .item-menu-dropdown.align-end {
-    right: 0;
-    left: auto;
+.item-menu-dropdown.is-portal {
+    position: fixed;
+    z-index: 1100;
 }
 
-.item-menu .item-menu-dropdown.align-start {
-    left: 0;
-    right: auto;
-}
-
-.item-menu button.item-menu-option {
+button.item-menu-option {
     width: 100%;
     min-height: 0;
     height: auto;
@@ -90,19 +81,19 @@
     gap: 0;
 }
 
-.item-menu button.item-menu-option:hover {
+button.item-menu-option:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
     transform: none;
 }
 
-.item-menu button.item-menu-option.danger {
+button.item-menu-option.danger {
     background: none;
     border: none;
     color: #f87171;
 }
 
-.item-menu button.item-menu-option.danger:hover {
+button.item-menu-option.danger:hover {
     background: rgba(239, 68, 68, 0.12);
     color: #fca5a5;
     transform: none;

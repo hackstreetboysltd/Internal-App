@@ -139,7 +139,7 @@ export default function RoleAccessClient() {
 
     const loadRoleAccess = useCallback(async () => {
         try {
-            const data = await get("role_access", { admin: false });
+            const data = await get("role_access");
             if (Array.isArray(data)) {
                 const allowedRec = data.find((r) => r.id === "allowed");
                 const adminsRec = data.find((r) => r.id === "admins");
@@ -163,7 +163,6 @@ export default function RoleAccessClient() {
             }
             setLoading(false);
         }, {
-            admin: false,
             onError: (err) => {
                 console.warn("Could not load role access, starting fresh.", err);
                 setAllowedEmails([]);
@@ -180,7 +179,7 @@ export default function RoleAccessClient() {
                 { id: "allowed", emails: nextAllowed },
                 { id: "admins", emails: nextAdmins },
             ];
-            await save("role_access", payload, { admin: false });
+            await save("role_access", payload);
         } catch (err) {
             console.error("Error saving role access configuration:", err);
             await showDialog({
