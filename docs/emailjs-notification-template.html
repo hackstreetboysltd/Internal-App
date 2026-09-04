@@ -5,40 +5,40 @@
   Inside a string section, use {{.}} — {{detail_text}} resolves empty there.
 -->
 <div style="background:#f4f4f5;margin:0;padding:28px 12px;font-family:Arial,Helvetica,sans-serif;">
-  <div style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 24px 24px;color:#18181b;">
+  <div style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 24px 24px;color:#18181b;text-align:center;">
     {{#eyebrow}}
     <div style="margin:0 0 12px;font-size:11px;letter-spacing:0.14em;color:#a1a1aa;text-transform:uppercase;">
       {{.}}
     </div>
     {{/eyebrow}}
     {{#headline}}
-    <p style="margin:0;font-size:16px;line-height:1.45;color:#27272a;">
+    <p style="margin:0 0 12px;font-size:16px;line-height:1.45;color:#27272a;">
       {{.}}
     </p>
     {{/headline}}
     {{#detail_text}}
-    <div style="margin:0;background:#f4f4f5;border-radius:12px;padding:14px 16px;font-size:15px;line-height:1.5;color:#3f3f46;white-space:pre-line;">
+    <p style="margin:0;font-size:16px;line-height:1.5;color:#3f3f46;white-space:pre-line;">
       {{.}}
-    </div>
+    </p>
     {{/detail_text}}
     {{#note}}
     <p style="margin:14px 0 0;font-size:14px;line-height:1.45;color:#52525b;white-space:pre-line;">
       {{.}}
     </p>
     {{/note}}
-    <p style="margin:16px 0 0;font-size:12px;color:#a1a1aa;text-align:center;">
+    <p style="margin:16px 0 0;font-size:12px;color:#a1a1aa;">
       {{timestamp}}
     </p>
-    <p style="margin:22px 0 0;text-align:center;">
+    <p style="margin:22px 0 0;">
       <a href="{{portal_url}}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px;">
         {{cta_label}}
       </a>
     </p>
-    <div style="margin:28px 0 0;text-align:center;font-weight:800;letter-spacing:0.06em;font-size:13px;color:#18181b;">
+    <div style="margin:28px 0 0;font-weight:800;letter-spacing:0.06em;font-size:13px;color:#18181b;">
       HACKSTREETBOYS <span style="font-weight:600;opacity:0.55;">LTD</span>
     </div>
     {{#footer}}
-    <p style="margin:14px 0 0;font-size:11px;line-height:1.45;color:#a1a1aa;text-align:center;">
+    <p style="margin:14px 0 0;font-size:11px;line-height:1.45;color:#a1a1aa;">
       {{.}}
     </p>
     {{/footer}}
