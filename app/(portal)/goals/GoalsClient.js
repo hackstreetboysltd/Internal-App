@@ -1024,15 +1024,9 @@ export default function GoalsClient() {
         ];
     }, [actorOwns, deleteWorkspaceRecord, isAdminView, openUnifiedEdit, showAlert, goalEmail]);
 
-    const renderedRows = pageRows.map((row, idx) => {
+    const renderedRows = pageRows.map((row) => {
         const menuItems = buildGoalMenuItems(row.record, row.goal.index, row.goal);
-        let showActions = false;
-        if (isAdminView) {
-            showActions = menuItems.length > 0;
-        } else {
-            const firstOwnerIdx = pageRows.findIndex((r) => r.record.id === row.record.id && r.canManage);
-            showActions = menuItems.length > 0 && firstOwnerIdx === idx;
-        }
+        const showActions = menuItems.length > 0;
         return { ...row, menuItems, showActions };
     });
 
