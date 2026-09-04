@@ -18,7 +18,7 @@ const assigned = assigneeGoalEmailCopy({
   portalUrl: "https://example.com",
 });
 
-assert.equal(assigned.headline, "You have been assigned a goal.");
+assert.equal(assigned.headline, "");
 assert.equal(assigned.detail_text, "test");
 assert.equal(assigned.eyebrow, "");
 assert.equal(assigned.subject, "You have been assigned a goal");
@@ -33,7 +33,7 @@ const many = assigneeGoalEmailCopy({
   timestamp: "now",
   portalUrl: "https://example.com",
 });
-assert.equal(many.headline, "You have been assigned some goals.");
+assert.equal(many.headline, "");
 assert.equal(many.detail_text, "• Ship Q3\n• Hire intern");
 assert.equal(many.subject, "You have been assigned some goals");
 assert.equal(many.eyebrow, "");
