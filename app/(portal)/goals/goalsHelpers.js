@@ -11,7 +11,7 @@ export const HORIZON_OPTIONS = [
     { value: "weekly", label: "Weekly" },
     { value: "daily", label: "Daily" },
 ];
-export const WORKSPACE_ITEMS_PER_PAGE = 4;
+export const WORKSPACE_ITEMS_PER_PAGE = 9;
 export const ITEMS_PER_PAGE = 5;
 export const LEADERBOARD_ITEMS_PER_PAGE = 5;
 export const MONTHS = [
