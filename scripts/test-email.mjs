@@ -61,7 +61,7 @@ async function sendDirectEmail({ label, creds, toEmail }) {
       portal_url: origin,
       cta_label: "Open Portal",
       footer: "This is a smoke-test email from the portal.",
-      subject: `[Portal Test] ${label}`,
+      subject: `Email test: ${label}`,
     },
   });
 
