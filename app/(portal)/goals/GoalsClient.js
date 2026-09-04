@@ -261,6 +261,7 @@ export default function GoalsClient() {
     const [unifiedOpen, setUnifiedOpen] = useState(false);
     const [unifiedShown, setUnifiedShown] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [editingGoalIndex, setEditingGoalIndex] = useState(null);
     const [draftItems, setDraftItems] = useState([]);
     const [editingKey, setEditingKey] = useState(null);
     const [editText, setEditText] = useState("");
@@ -515,6 +516,7 @@ export default function GoalsClient() {
 
     const openUnifiedNew = () => {
         setEditingId(null);
+        setEditingGoalIndex(null);
         setDraftItems([]);
         setEditingKey(null);
         clearEditor();
@@ -534,14 +536,18 @@ export default function GoalsClient() {
         if (!unifiedOpen) return;
         const node = editorRef.current;
         if (node) node.innerHTML = "";
-    }, [unifiedOpen, editingId]);
+    }, [unifiedOpen, editingId, editingGoalIndex]);
 
-    const openUnifiedEdit = useCallback((recordId) => {
+    const openUnifiedEdit = useCallback((recordId, goalIndex = 0) => {
         if (isAdminView) return;
         const record = records.find((r) => sameId(r.id, recordId));
         if (!record) return;
+        const goals = Array.isArray(record.goals) ? record.goals : [];
+        const goal = goals[goalIndex];
+        if (!goal) return;
         setEditingId(record.id);
-        setDraftItems((record.goals || []).map((g) => ({ key: nextDraftKey(), text: g.text })));
+        setEditingGoalIndex(goalIndex);
+        setDraftItems([{ key: nextDraftKey(), text: goal.text || "" }]);
         setEditingKey(null);
         setTagOpen(false);
         setTagFilter("");
@@ -556,6 +562,7 @@ export default function GoalsClient() {
     const closeUnified = () => {
         closeModal(setUnifiedOpen, setUnifiedShown, () => {
             setEditingId(null);
+            setEditingGoalIndex(null);
             setDraftItems([]);
             setEditingKey(null);
             clearEditor();
@@ -580,6 +587,47 @@ export default function GoalsClient() {
 
         const currentDB = cloneRecords(records);
         const userEmail = (currentActor.email || "").trim().toLowerCase();
+        const periodId = computePeriodId(horizon);
+
+        const makeRecord = (text, { user, email, scopeValue, assigned }) => {
+            const id = nextItemId();
+            const record = {
+                id,
+                createdAt: new Date(id).toISOString(),
+                user,
+                email,
+                goals: [{ text, done: false }],
+                weekId: horizon === "weekly" ? periodId : null,
+                periodId,
+                type: horizon,
+                scope: scopeValue,
+            };
+            if (assigned) {
+                record.assignedByAdmin = true;
+                record.createdBy = currentActor.name;
+                record.createdByEmail = userEmail;
+            }
+            return record;
+        };
+
+        const updateEditedGoal = (record, texts) => {
+            const goals = Array.isArray(record.goals) ? record.goals : [];
+            const idx = Number.isInteger(editingGoalIndex) ? editingGoalIndex : 0;
+            if (!goals[idx]) return false;
+            const previous = goals[idx];
+            goals[idx] = {
+                ...previous,
+                text: texts[0],
+            };
+            record.goals = goals;
+            if (horizon !== resolveGoalType(record)) {
+                record.type = horizon;
+                record.periodId = periodId;
+                record.weekId = horizon === "weekly" ? periodId : null;
+            }
+            delete record.title;
+            return true;
+        };
 
         if (isAdminView) {
             let targetUser = currentActor.name || "Anonymous";
@@ -603,13 +651,11 @@ export default function GoalsClient() {
                     await showAlert("Error", "Goal record not found.");
                     return;
                 }
-                const originalGoals = record.goals || [];
-                record.goals = itemsArray.map((text) => {
-                    const match = originalGoals.find((og) => og.text.toLowerCase() === text.toLowerCase());
-                    return { text, done: match ? match.done : false };
-                });
+                if (!updateEditedGoal(record, itemsArray)) {
+                    await showAlert("Error", "Goal item not found.");
+                    return;
+                }
                 record.scope = scope;
-                delete record.title;
                 if (scope === "personal") {
                     record.user = targetUser;
                     record.email = targetEmail;
@@ -623,31 +669,28 @@ export default function GoalsClient() {
                     delete record.createdBy;
                     delete record.createdByEmail;
                 }
+                for (let i = 1; i < itemsArray.length; i += 1) {
+                    currentDB.push(makeRecord(itemsArray[i], {
+                        user: targetUser,
+                        email: targetEmail,
+                        scopeValue: scope,
+                        assigned: isAssigned,
+                    }));
+                }
                 const saved = await persistGoals(currentDB);
                 if (!saved) return;
                 closeUnified();
                 return;
             }
 
-            const periodId = computePeriodId(horizon);
-            const now = nextItemId();
-            const record = {
-                id: now,
-                createdAt: new Date(now).toISOString(),
-                user: targetUser,
-                email: targetEmail,
-                goals: itemsArray.map((item) => ({ text: item, done: false })),
-                weekId: horizon === "weekly" ? periodId : null,
-                periodId,
-                type: horizon,
-                scope,
-            };
-            if (isAssigned) {
-                record.assignedByAdmin = true;
-                record.createdBy = currentActor.name;
-                record.createdByEmail = userEmail;
+            for (const text of itemsArray) {
+                currentDB.push(makeRecord(text, {
+                    user: targetUser,
+                    email: targetEmail,
+                    scopeValue: scope,
+                    assigned: isAssigned,
+                }));
             }
-            currentDB.push(record);
             const saved = await persistGoals(currentDB);
             if (!saved) return;
             closeUnified();
@@ -661,56 +704,61 @@ export default function GoalsClient() {
                 await showAlert("Error", "Goal record not found.");
                 return;
             }
-            let type = resolveGoalType(record);
-            const originalGoals = record.goals || [];
-            record.goals = itemsArray.map((text) => {
-                const match = originalGoals.find((og) => og.text.toLowerCase() === text.toLowerCase());
-                return { text, done: match ? match.done : false };
-            });
+            if (!updateEditedGoal(record, itemsArray)) {
+                await showAlert("Error", "Goal item not found.");
+                return;
+            }
             if (!record.scope) record.scope = "personal";
             if (userEmail) record.email = userEmail;
-            if (horizon !== type) {
-                const periodId = computePeriodId(horizon);
-                record.type = horizon;
-                record.periodId = periodId;
-                record.weekId = horizon === "weekly" ? periodId : null;
+            for (let i = 1; i < itemsArray.length; i += 1) {
+                currentDB.push(makeRecord(itemsArray[i], {
+                    user,
+                    email: userEmail,
+                    scopeValue: "personal",
+                    assigned: false,
+                }));
             }
-            delete record.title;
             const saved = await persistGoals(currentDB);
             if (!saved) return;
             closeUnified();
             return;
         }
 
-        const periodId = computePeriodId(horizon);
-        const now = nextItemId();
-        currentDB.push({
-            id: now,
-            createdAt: new Date(now).toISOString(),
-            user,
-            email: userEmail,
-            goals: itemsArray.map((item) => ({ text: item, done: false })),
-            weekId: horizon === "weekly" ? periodId : null,
-            periodId,
-            type: horizon,
-            scope: "personal",
-        });
+        for (const text of itemsArray) {
+            currentDB.push(makeRecord(text, {
+                user,
+                email: userEmail,
+                scopeValue: "personal",
+                assigned: false,
+            }));
+        }
         const saved = await persistGoals(currentDB);
         if (!saved) return;
         closeUnified();
     });
 
-    const deleteWorkspaceRecord = useCallback(async (id) => {
+    const deleteWorkspaceGoal = useCallback(async (id, goalIndex) => {
         const data = cloneRecords(records);
         const item = data.find((r) => sameId(r.id, id));
         if (item && !actorOwns(item)) {
-            await showAlert("Permission Denied", "You can only remove your own goal cards.");
+            await showAlert("Permission Denied", "You can only remove your own goals.");
             return;
         }
-        const confirmed = await showConfirm("Confirm Delete", "Are you sure you want to delete this goal record?");
+        const confirmed = await showConfirm("Confirm Delete", "Are you sure you want to delete this goal?");
         if (!confirmed) return;
-        const filtered = data.filter((r) => !sameId(r.id, id));
-        const saved = await persistGoals(filtered);
+        const goals = Array.isArray(item?.goals) ? item.goals : [];
+        if (!item || goalIndex < 0 || goalIndex >= goals.length) {
+            await showAlert("Error", "Goal item not found.");
+            return;
+        }
+        let next;
+        if (goals.length <= 1) {
+            next = data.filter((r) => !sameId(r.id, id));
+        } else {
+            item.goals = goals.filter((_, i) => i !== goalIndex);
+            next = data;
+        }
+        const saved = await persistGoals(next);
         if (!saved) return;
     }, [actorOwns, persistGoals, records, showAlert, showConfirm]);
 
@@ -1019,10 +1067,10 @@ export default function GoalsClient() {
         }
         if (!actorOwns(record)) return [];
         return [
-            { label: "Edit", onClick: () => openUnifiedEdit(record.id) },
-            { label: "Delete", onClick: () => deleteWorkspaceRecord(record.id), danger: true },
+            { label: "Edit", onClick: () => openUnifiedEdit(record.id, goalIndex) },
+            { label: "Delete", onClick: () => deleteWorkspaceGoal(record.id, goalIndex), danger: true },
         ];
-    }, [actorOwns, deleteWorkspaceRecord, isAdminView, openUnifiedEdit, showAlert, goalEmail]);
+    }, [actorOwns, deleteWorkspaceGoal, isAdminView, openUnifiedEdit, showAlert, goalEmail]);
 
     const renderedRows = pageRows.map((row) => {
         const menuItems = buildGoalMenuItems(row.record, row.goal.index, row.goal);
@@ -1293,7 +1341,9 @@ export default function GoalsClient() {
                         <label htmlFor="goalHorizonSelect" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>Goal Horizon</label>
                         <WorkspaceSelect full value={horizon} options={horizonOptions} onChange={(v) => { setHorizon(v); setCurrentTab(v); }} />
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                            <label style={{ fontSize: "0.85rem", color: "#9ca3af", marginBottom: 0 }}>{itemsLabelForType(horizon)}</label>
+                            <label style={{ fontSize: "0.85rem", color: "#9ca3af", marginBottom: 0 }}>
+                                {editingId ? "Goal" : itemsLabelForType(horizon)}
+                            </label>
                             <IconBtn title="View goal requirements" onClick={() => openModal(setInfoOpen, setInfoShown)} style={{ width: "auto", fontSize: "0.95rem", opacity: 0.8 }} hoverScale={1.15}>
                                 <i className="fa-solid fa-circle-info"></i>
                             </IconBtn>

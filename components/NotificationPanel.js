@@ -66,7 +66,7 @@ function actorLabel(row) {
   return email || name || "Team member";
 }
 
-/** Group by server batch_key (same goals record). Singles stay singles. */
+/** Group by server batch_key (owner + horizon + period for goals). Singles stay singles. */
 function groupApprovalItems(items) {
   /** @type {Map<string, Array<Record<string, unknown>>>} */
   const batches = new Map();
