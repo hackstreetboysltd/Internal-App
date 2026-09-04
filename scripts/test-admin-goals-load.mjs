@@ -1,5 +1,5 @@
 /**
- * Regression: admin module loads must bypass sync cache and never cache-subscribe.
+ * Regression: admin modules paint from warm cache; no sync-cache subscribe loops.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,23 +12,25 @@ const dataApi = readFileSync(join(root, "lib/dataApi.js"), "utf8");
 const goalsClient = readFileSync(join(root, "app/(portal)/goals/GoalsClient.js"), "utf8");
 
 assert.match(portalApi, /ADMIN_PENDING_MERGE/);
-assert.match(portalApi, /function adminFetchOptions/);
-assert.match(portalApi, /bypassCache:\s*true/);
-assert.match(portalApi, /Admin watch\(/);
+assert.match(portalApi, /function adminCollectionOpts/);
+assert.match(portalApi, /cachedCollectionItems/);
+assert.match(portalApi, /Instant first paint from warm cache/);
 
-// Must not reintroduce cache subscription on the admin watch path.
 const adminWatchBlock = portalApi.match(/if \(isAdmin\) \{[\s\S]*?return watchCollection/)?.[0] || "";
 assert.doesNotMatch(adminWatchBlock, /cacheManager\.subscribe/);
+assert.match(adminWatchBlock, /cachedCollectionItems/);
 
-// Admin puts must write the saved payload, not clear to [].
-assert.match(dataApi, /Always seed the local cache with the saved payload/);
+// admin flag alone must not force a cold bypass anymore
+assert.match(
+  dataApi,
+  /Only an explicit bypass skips the warm sync cache/,
+);
 assert.doesNotMatch(
-  dataApi.match(/export async function putCollection[\s\S]*?return res\.json\(\);/)?.[0] || "",
-  /if \(!options\.admin && Array\.isArray\(data\)\)/,
+  dataApi.match(/export async function fetchCollection[\s\S]*?const cached =/)?.[0] || "",
+  /options\.admin \|\| options\.bypassCache/,
 );
 
+assert.match(dataApi, /Always seed the local cache with the saved payload/);
 assert.match(goalsClient, /\}, \[watchEpoch\]\);/);
-assert.doesNotMatch(goalsClient, /\}, \[searchParams, watchEpoch\]\);/);
-assert.match(goalsClient, /admin:\s*false/);
 
-console.log("ok — admin module load guards in place");
+console.log("ok — admin fast-load guards in place");
