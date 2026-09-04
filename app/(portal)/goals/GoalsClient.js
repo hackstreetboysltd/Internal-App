@@ -318,16 +318,17 @@ export default function GoalsClient() {
         try {
             const [goalsData, profileData] = await Promise.all([
                 get("goals"),
-                get("profile"),
+                get("profile", { admin: false }),
             ]);
             const nextUsers = Array.isArray(profileData) ? profileData : [];
             setRecords(Array.isArray(goalsData) ? goalsData : []);
             setUsers(nextUsers);
+            setLoadedEpoch((prev) => prev ?? watchEpoch);
         } catch (e) {
             console.error("Error fetching workspace goals:", e);
             setRecords([]);
         }
-    }, []);
+    }, [watchEpoch]);
 
     useEffect(() => {
         if (!appsWatchActive) return undefined;
@@ -339,23 +340,39 @@ export default function GoalsClient() {
     }, [appsWatchActive]);
 
     useEffect(() => {
+        let cancelled = false;
         const seen = new Set();
         const mark = (key) => {
             seen.add(key);
-            if (seen.size >= 2) setLoadedEpoch(watchEpoch);
+            if (!cancelled && seen.size >= 2) setLoadedEpoch(watchEpoch);
         };
+        // Depend on watchEpoch (string) only — `searchParams` identity can change every
+        // render and would remount this effect, cancel in-flight admin gets, and leave
+        // the page stuck on skeletons while hammering /api/sync/*.
         const unsubs = [
             watch("goals", (d) => {
                 setRecords(Array.isArray(d) ? d : []);
                 mark("goals");
             }, { onError: (e) => { console.error("Error fetching workspace goals:", e); setRecords([]); mark("goals"); } }),
+            // Profiles are not pending-merged; force the live collection path.
             watch("profile", (d) => {
                 setUsers(Array.isArray(d) ? d : []);
                 mark("profile");
-            }, { onError: () => { setUsers([]); mark("profile"); } }),
+            }, { admin: false, onError: () => { setUsers([]); mark("profile"); } }),
         ];
-        return () => unsubs.forEach((u) => u());
-    }, [searchParams, watchEpoch]);
+        const timeoutId = setTimeout(() => {
+            if (cancelled) return;
+            if (seen.size < 2) {
+                console.warn("Goals workspace load timed out; showing whatever is available.");
+                setLoadedEpoch(watchEpoch);
+            }
+        }, 12_000);
+        return () => {
+            cancelled = true;
+            clearTimeout(timeoutId);
+            unsubs.forEach((u) => u());
+        };
+    }, [watchEpoch]);
 
     const persistGoals = useCallback(async (list, { skipReload } = {}) => {
         try {
