@@ -645,14 +645,15 @@ export default function DocumentsClient() {
     const saveDocuments = async (list) => {
         try {
             await save("documents", list);
-            const next = await get("documents");
-            setRecords(Array.isArray(next) ? next : []);
+            setRecords(Array.isArray(list) ? list : []);
         } catch (e) {
             console.error("Error saving documents:", e);
             alert("Failed to save documents to the database.");
             throw e;
         }
     };
+
+    const snapshotDocuments = async () => persistableCollection(await get("documents", { cached: true }));
 
     const lastSearch = useRef("");
     useEffect(() => {
@@ -789,7 +790,7 @@ export default function DocumentsClient() {
                 }
             }
 
-            const list = persistableCollection(await get("documents"));
+            const list = await snapshotDocuments();
             const now = portalNowIso();
             list.push({
                 id: file.id,
@@ -857,7 +858,7 @@ export default function DocumentsClient() {
             confirmLabel: "Remove",
             danger: true,
             onConfirm: async () => {
-                const list = persistableCollection(await get("documents"));
+                const list = await snapshotDocuments();
                 const owned = list.find((item) => sameId(item.id, doc.id));
                 const blobRes = await fetch(apiPath(`/api/documents/files/${doc.id}`), {
                     method: "DELETE",
@@ -895,7 +896,7 @@ export default function DocumentsClient() {
             return;
         }
         try {
-            const list = persistableCollection(await get("documents"));
+            const list = await snapshotDocuments();
             await saveDocuments(applyDocumentRename(list, doc, name));
             const fileRes = await fetch(apiPath(`/api/documents/files/${doc.id}`), {
                 method: "PATCH",
@@ -998,7 +999,7 @@ export default function DocumentsClient() {
         const current = actorRef.current || { name: "A Team Member", email: "" };
         setSavingGroup(true);
         try {
-            const list = persistableCollection(await get("documents"));
+            const list = await snapshotDocuments();
 
             if (addingToGroupId) {
                 const owned = list.find((item) => isDocumentGroup(item) && sameId(item.id, addingToGroupId));
@@ -1083,7 +1084,7 @@ export default function DocumentsClient() {
             confirmLabel: "Remove",
             danger: true,
             onConfirm: async () => {
-                const list = persistableCollection(await get("documents"));
+                const list = await snapshotDocuments();
                 const owned = list.find((item) => isDocumentGroup(item) && sameId(item.id, group.id));
                 if (!owned) return;
                 const nextDocs = (Array.isArray(owned.documents) ? owned.documents : [])
@@ -1113,7 +1114,7 @@ export default function DocumentsClient() {
             confirmLabel: "Remove",
             danger: true,
             onConfirm: async () => {
-                const list = persistableCollection(await get("documents"));
+                const list = await snapshotDocuments();
                 await saveDocuments(list.filter((item) => !sameId(item.id, group.id)));
                 if (viewingGroup && sameId(viewingGroup.id, group.id)) closeGroupView();
             },
@@ -1130,7 +1131,7 @@ export default function DocumentsClient() {
             return;
         }
         try {
-            const list = persistableCollection(await get("documents"));
+            const list = await snapshotDocuments();
             const owned = list.find((item) => sameId(item.id, group.id));
             if (!owned) return;
             owned.name = name;
