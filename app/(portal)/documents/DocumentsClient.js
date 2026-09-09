@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiPath } from "@/lib/apiPath";
-import { get, getCollection, save, saveCollection, watch } from "@/lib/portalApi";
+import { get, save, watch } from "@/lib/portalApi";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { nextPortalId, portalNowIso } from "@/lib/portalTime";
 import ItemMenu from "@/components/ItemMenu";
@@ -15,7 +15,6 @@ import {
     canManageDocument,
     docIconForName,
     downloadAndOpenDocument,
-    filesCollectionName,
     fileExtension,
     formatFileBytes,
     formatDocMeta,
@@ -867,18 +866,19 @@ export default function DocumentsClient() {
                 if (blobRes.status === 403) {
                     throw new Error("Permission Denied: You can only delete documents you uploaded.");
                 }
+                // 404: metadata-only / already removed blob — still drop the library row.
+                if (!blobRes.ok && blobRes.status !== 404) {
+                    let detail = "Could not delete this document.";
+                    try {
+                        const body = await blobRes.json();
+                        detail = body.error || detail;
+                    } catch { /* ignore */ }
+                    throw new Error(detail);
+                }
                 if (owned) {
-                    await saveCollection(filesCollectionName(doc.id), []);
                     const withoutDoc = list.filter((item) => !sameId(item.id, doc.id));
                     await saveDocuments(removeDocumentFromGroups(withoutDoc, doc.id));
                 } else {
-                    const parent = list.find((item) => sameId(item.id, doc.payloadId));
-                    if (!parent) return;
-                    parent.documents = (Array.isArray(parent.documents) ? parent.documents : [])
-                        .filter((item) => !sameId(item.id, doc.id));
-                    const payloads = (await getCollection(filesCollectionName(parent.id)) || [])
-                        .filter((p) => !sameId(p.id, doc.id));
-                    await saveCollection(filesCollectionName(parent.id), payloads);
                     await saveDocuments(removeDocumentFromGroups(list, doc.id));
                 }
             },

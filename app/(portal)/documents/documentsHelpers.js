@@ -316,14 +316,20 @@ export async function loadDocumentBlob(doc) {
         return { blob: typed, name: filename, mimeType: mime };
     }
 
-    const payloads = await getCollection(filesCollectionName(doc.payloadId || doc.id));
-    const list = Array.isArray(payloads) ? payloads : [];
-    const payload = list.find((p) => sameId(p.id, doc.id)) || list[0];
-    if (payload?.dataUrl) {
-        const blob = dataUrlToBlob(payload.dataUrl);
-        if (blob) {
-            return { blob, name: payload.name || doc.name || "document", mimeType: blob.type || doc.mimeType || "" };
+    // Legacy fallback: pre-storage uploads lived in docfiles_* collections.
+    // UUID file ids make docfiles_<uuid> an invalid collection name — ignore that failure.
+    try {
+        const payloads = await getCollection(filesCollectionName(doc.payloadId || doc.id));
+        const list = Array.isArray(payloads) ? payloads : [];
+        const payload = list.find((p) => sameId(p.id, doc.id)) || list[0];
+        if (payload?.dataUrl) {
+            const blob = dataUrlToBlob(payload.dataUrl);
+            if (blob) {
+                return { blob, name: payload.name || doc.name || "document", mimeType: blob.type || doc.mimeType || "" };
+            }
         }
+    } catch {
+        /* ignore — primary path is /api/documents/files/:id */
     }
     throw new Error("Could not open this document.");
 }
