@@ -10,6 +10,12 @@ const {
 assert.equal(formatGoalsDetailText(["Ship Q3"]), "Ship Q3");
 assert.equal(formatGoalsDetailText(["Ship Q3", "Hire intern"]), "• Ship Q3\n• Hire intern");
 
+const long = "x".repeat(250);
+const clipped = formatGoalsDetailText([long]);
+assert.equal(clipped.length, 200);
+assert.ok(clipped.endsWith("..."));
+assert.equal(clipped, `${"x".repeat(197)}...`);
+
 const assigned = assigneeGoalEmailCopy({
   actorName: "KakaiK1ng",
   action: "assigned",
@@ -37,6 +43,15 @@ assert.equal(many.headline, "");
 assert.equal(many.detail_text, "• Ship Q3\n• Hire intern");
 assert.equal(many.subject, "You have been assigned some goals");
 assert.equal(many.eyebrow, "");
+
+const longAssigned = assigneeGoalEmailCopy({
+  actorName: "KakaiK1ng",
+  goalItems: [{ text: long }],
+  timestamp: "now",
+  portalUrl: "https://example.com",
+});
+assert.ok(longAssigned.detail_text.endsWith("..."));
+assert.equal(longAssigned.detail_text.length, 200);
 
 const reminder = goalReminderEmailCopy({
   actorName: "KakaiK1ng",
