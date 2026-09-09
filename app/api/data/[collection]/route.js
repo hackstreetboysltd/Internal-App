@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeCollectionSave } from "@/lib/server/authorize";
-import { assertValidCollectionName } from "@/lib/server/collectionNames";
+import { isValidCollectionName } from "@/lib/server/collectionNames";
 import {
   listCollectionItems,
   readCollection,
@@ -25,7 +25,9 @@ async function ensureAllowedReader(session) {
 
 export const GET = withApi(async (_request, routeContext, { session }) => {
   const { collection } = await routeContext.params;
-  assertValidCollectionName(collection);
+  if (!isValidCollectionName(collection)) {
+    return NextResponse.json({ error: "Invalid collection name" }, { status: 400 });
+  }
 
   if (!(await ensureAllowedReader(session))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -37,7 +39,9 @@ export const GET = withApi(async (_request, routeContext, { session }) => {
 
 export const PUT = withApi(async (request, routeContext, { session }) => {
   const { collection } = await routeContext.params;
-  assertValidCollectionName(collection);
+  if (!isValidCollectionName(collection)) {
+    return NextResponse.json({ error: "Invalid collection name" }, { status: 400 });
+  }
 
   if (!(await ensureAllowedReader(session))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

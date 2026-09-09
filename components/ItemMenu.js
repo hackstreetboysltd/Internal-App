@@ -71,6 +71,12 @@ export default function ItemMenu({ items, align = "end", title = "Options" }) {
 
     if (!Array.isArray(items) || !items.length) return null;
 
+    // Portal mounts under document.body, but React still bubbles events through
+    // the component tree — stop them here so parent tiles/cards don't activate.
+    const stopBubble = (e) => {
+        e.stopPropagation();
+    };
+
     const dropdown = open && coords && mounted
         ? createPortal(
             <div
@@ -84,6 +90,10 @@ export default function ItemMenu({ items, align = "end", title = "Options" }) {
                     right: coords.right,
                     zIndex: 1100,
                 }}
+                onClick={stopBubble}
+                onMouseDown={stopBubble}
+                onPointerDown={stopBubble}
+                onKeyDown={stopBubble}
             >
                 {items.map((item) => (
                     <button
@@ -91,7 +101,8 @@ export default function ItemMenu({ items, align = "end", title = "Options" }) {
                         type="button"
                         role="menuitem"
                         className={`item-menu-option${item.danger ? " danger" : ""}`}
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             setOpen(false);
                             item.onClick?.();
                         }}

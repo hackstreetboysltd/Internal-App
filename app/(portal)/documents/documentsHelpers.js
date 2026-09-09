@@ -15,6 +15,18 @@ export function filesCollectionName(id) {
     return `docfiles_${id}`;
 }
 
+/**
+ * Legacy `docfiles_<id>` collections only — UUID ids include hyphens and are invalid.
+ * @param {string | number | null | undefined} id
+ * @returns {string | null}
+ */
+export function legacyFilesCollectionName(id) {
+    if (id == null || id === "") return null;
+    const name = filesCollectionName(id);
+    if (name.length > 128 || !/^[a-z0-9_]+$/i.test(name)) return null;
+    return name;
+}
+
 export function persistableCollection(list) {
     return (list || []).filter((item) => !item.pendingId && !item.pendingType);
 }
@@ -317,19 +329,27 @@ export async function loadDocumentBlob(doc) {
     }
 
     // Legacy fallback: pre-storage uploads lived in docfiles_* collections.
-    // UUID file ids make docfiles_<uuid> an invalid collection name — ignore that failure.
-    try {
-        const payloads = await getCollection(filesCollectionName(doc.payloadId || doc.id));
-        const list = Array.isArray(payloads) ? payloads : [];
-        const payload = list.find((p) => sameId(p.id, doc.id)) || list[0];
-        if (payload?.dataUrl) {
-            const blob = dataUrlToBlob(payload.dataUrl);
-            if (blob) {
-                return { blob, name: payload.name || doc.name || "document", mimeType: blob.type || doc.mimeType || "" };
+    // Skip when the id would produce an invalid name (e.g. docfiles_<uuid>) — that
+    // path 500s the sync/data APIs and cannot contain a recoverable payload.
+    const legacyName = legacyFilesCollectionName(doc.payloadId || doc.id);
+    if (legacyName) {
+        try {
+            const payloads = await getCollection(legacyName);
+            const list = Array.isArray(payloads) ? payloads : [];
+            const payload = list.find((p) => sameId(p.id, doc.id)) || list[0];
+            if (payload?.dataUrl) {
+                const blob = dataUrlToBlob(payload.dataUrl);
+                if (blob) {
+                    return {
+                        blob,
+                        name: payload.name || doc.name || "document",
+                        mimeType: blob.type || doc.mimeType || "",
+                    };
+                }
             }
+        } catch {
+            /* ignore — primary path is /api/documents/files/:id */
         }
-    } catch {
-        /* ignore — primary path is /api/documents/files/:id */
     }
     throw new Error("Could not open this document.");
 }

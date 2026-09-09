@@ -1273,7 +1273,11 @@ export default function DocumentsClient() {
                                             }}
                                         >
                                             {isOwner && !grouping ? (
-                                                <span className="doc-tile-actions">
+                                                <span
+                                                    className="doc-tile-actions"
+                                                    onClick={stopTileActivate}
+                                                    onPointerDown={stopTileActivate}
+                                                >
                                                     <ItemMenu
                                                         items={[
                                                             { label: "Rename", onClick: () => setRenamingId(item.id) },
@@ -1345,7 +1349,11 @@ export default function DocumentsClient() {
                                                 />
                                             </label>
                                         ) : isOwner ? (
-                                            <span className="doc-tile-actions">
+                                            <span
+                                                className="doc-tile-actions"
+                                                onClick={stopTileActivate}
+                                                onPointerDown={stopTileActivate}
+                                            >
                                                 <ItemMenu
                                                     items={[
                                                         { label: "Rename", onClick: () => setRenamingId(doc.id) },

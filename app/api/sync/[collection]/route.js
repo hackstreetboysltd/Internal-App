@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertValidCollectionName } from "@/lib/server/collectionNames";
+import { isValidCollectionName } from "@/lib/server/collectionNames";
 import { getCollectionDelta } from "@/lib/server/collectionsDb";
 import { buildRateLimitKey, checkRateLimit } from "@/lib/server/rateLimit";
 import { isEmailAllowed } from "@/lib/server/whitelist";
@@ -17,7 +17,9 @@ async function ensureAllowedReader(session) {
 
 export const GET = withApi(async (request, routeContext, { session }) => {
   const { collection } = await routeContext.params;
-  assertValidCollectionName(collection);
+  if (!isValidCollectionName(collection)) {
+    return NextResponse.json({ error: "Invalid collection name" }, { status: 400 });
+  }
 
   if (!(await ensureAllowedReader(session))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
