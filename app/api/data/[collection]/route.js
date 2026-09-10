@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { authorizeCollectionSave } from "@/lib/server/authorize";
 import { isValidCollectionName } from "@/lib/server/collectionNames";
 import {
+  CollectionSaveError,
   listCollectionItems,
   readCollection,
-  replaceCollectionItems,
+  replaceCollectionItemsAtomic,
 } from "@/lib/server/collectionsDb";
 import { buildRateLimitKey, checkRateLimit } from "@/lib/server/rateLimit";
 import { effectiveAdminView } from "@/lib/server/adminRole";
@@ -23,7 +24,18 @@ async function ensureAllowedReader(session) {
   return isEmailAllowed(session.email);
 }
 
-export const GET = withApi(async (_request, routeContext, { session }) => {
+/**
+ * @param {{ name?: string, email?: string, roles?: string[] } | null | undefined} session
+ */
+function actorFromSession(session) {
+  return {
+    name: session?.name,
+    email: session?.email,
+    roles: Array.isArray(session?.roles) ? session.roles : [],
+  };
+}
+
+export const GET = withApi(async (request, routeContext, { session }) => {
   const { collection } = await routeContext.params;
   if (!isValidCollectionName(collection)) {
     return NextResponse.json({ error: "Invalid collection name" }, { status: 400 });
@@ -33,7 +45,9 @@ export const GET = withApi(async (_request, routeContext, { session }) => {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const data = await readCollection(collection);
+  const data = await readCollection(collection, actorFromSession(session), {
+    adminSeesAll: effectiveAdminView(request, session),
+  });
   return NextResponse.json(data);
 }, { auth: true, rateLimits: ["ip", "user"] });
 
@@ -68,28 +82,42 @@ export const PUT = withApi(async (request, routeContext, { session }) => {
     return NextResponse.json({ error: "Body must be an array" }, { status: 400 });
   }
 
-  const oldCollection = await listCollectionItems(collection);
-  const users = collection === "goals" ? await listCollectionItems("profile") : [];
-  const auth = authorizeCollectionSave(
-    collection,
-    oldCollection,
-    body,
-    { name: session.name, email: session.email },
-    { adminView: effectiveAdminView(request, session), users },
-  );
-
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.message }, { status: auth.status });
+  const actor = actorFromSession(session);
+  // Authorize against a snapshot taken UNDER the collection lock so a concurrent
+  // PUT cannot soft-delete rows the other writer just inserted (lost update).
+  let oldCollection;
+  let toSave;
+  try {
+    const result = await replaceCollectionItemsAtomic(collection, session.email, async (lockedOld) => {
+      const users = collection === "goals" ? await listCollectionItems("profile") : [];
+      const channels = collection === "messages" ? await listCollectionItems("channels") : [];
+      const auth = authorizeCollectionSave(
+        collection,
+        lockedOld,
+        body,
+        actor,
+        { adminView: effectiveAdminView(request, session), users, channels },
+      );
+      if (!auth.ok) {
+        throw new CollectionSaveError(auth.message, auth.status);
+      }
+      return Array.isArray(auth.body) ? auth.body : body;
+    });
+    oldCollection = result.oldItems;
+    toSave = result.newItems;
+  } catch (err) {
+    if (err instanceof CollectionSaveError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    throw err;
   }
-
-  await replaceCollectionItems(collection, body, session.email, oldCollection);
   if (collection === "profile") {
     invalidatePendingApprovalsCache();
   }
   dispatchCollectionNotifications({
     collectionName: collection,
     oldItems: oldCollection,
-    newItems: body,
+    newItems: toSave,
     actor: { name: session.name, email: session.email },
   });
   return NextResponse.json({ success: true });

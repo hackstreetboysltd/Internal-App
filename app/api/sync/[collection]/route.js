@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isValidCollectionName } from "@/lib/server/collectionNames";
 import { getCollectionDelta } from "@/lib/server/collectionsDb";
 import { buildRateLimitKey, checkRateLimit } from "@/lib/server/rateLimit";
+import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
 import { withApi } from "@/lib/server/withApi";
 
@@ -13,6 +14,14 @@ export const dynamic = "force-dynamic";
 async function ensureAllowedReader(session) {
   if (!session?.email) return false;
   return isEmailAllowed(session.email);
+}
+
+function actorFromSession(session) {
+  return {
+    name: session?.name,
+    email: session?.email,
+    roles: Array.isArray(session?.roles) ? session.roles : [],
+  };
 }
 
 export const GET = withApi(async (request, routeContext, { session }) => {
@@ -38,6 +47,11 @@ export const GET = withApi(async (request, routeContext, { session }) => {
   const url = new URL(request.url);
   const since = url.searchParams.get("since");
 
-  const delta = await getCollectionDelta(collection, since || null);
+  const delta = await getCollectionDelta(
+    collection,
+    since || null,
+    actorFromSession(session),
+    { adminSeesAll: effectiveAdminView(request, session) },
+  );
   return NextResponse.json(delta);
 }, { auth: true, rateLimits: ["ip", "user"] });

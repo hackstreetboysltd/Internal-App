@@ -26,7 +26,7 @@ export function cloneMessages(list) {
 export function decryptFingerprint(m) {
     if (!m?.id) return "";
     const wraps = (m.wrappedKeys || [])
-        .map((w) => `${w.email || ""}:${w.ct || w.ciphertext || ""}:${w.ephemPub || w.ephemeralPub || ""}`)
+        .map((w) => `${w.email || ""}:${w.key || ""}:${w.kemCt || ""}:${w.salt || ""}`)
         .join("|");
     return `${m.id}|${wraps}|${m.body || ""}|${m.timestamp || ""}`;
 }
@@ -42,6 +42,12 @@ export function getMessageCreatedTime(m) {
 
 export function formatMessageCreatedStamp(m) {
     return formatPortalCreatedStamp(getMessageCreatedTime(m));
+}
+
+/** True when a successful edit persisted `editedAt`. */
+export function isMessageEdited(m) {
+    if (!m || m.editedAt == null || m.editedAt === "") return false;
+    return Number.isFinite(Date.parse(String(m.editedAt)));
 }
 
 export function messageEmail(m, users) {

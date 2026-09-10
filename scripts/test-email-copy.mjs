@@ -66,4 +66,20 @@ assert.equal(reminder.note, "jooh");
 
 assert.deepEqual(extractGoalTexts([{ text: "  <b>Hi</b>  " }]), ["Hi"]);
 
+const {
+  SECURE_CHANNEL_ADDED,
+  SECURE_MESSAGE_RECEIVED,
+  secureNoticeEmailCopy,
+} = await import(new URL("../lib/server/notifications/emailCopy.js", import.meta.url));
+
+const notice = secureNoticeEmailCopy({
+  subject: SECURE_MESSAGE_RECEIVED,
+  timestamp: "now",
+  portalUrl: "https://example.com",
+});
+assert.equal(notice.subject, SECURE_MESSAGE_RECEIVED);
+assert.equal(notice.headline, "");
+assert.equal(notice.detail_text, "");
+assert.equal(SECURE_CHANNEL_ADDED, "You have been added to this secure channel. Check it out");
+
 console.log("email copy assertions passed");

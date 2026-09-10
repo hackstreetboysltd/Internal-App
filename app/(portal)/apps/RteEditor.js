@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export default function RteEditor({ seedKey, initialHtml, placeholder, editorRef }) {
+export default function RteEditor({ seedKey, initialHtml, placeholder, editorRef, compact = false, onKeyDown }) {
     const elRef = useRef(null);
 
     useEffect(() => {
@@ -39,24 +39,27 @@ export default function RteEditor({ seedKey, initialHtml, placeholder, editorRef
     );
 
     return (
-        <div className="rte-wrapper">
-            <div className="rte-toolbar">
-                {tool("bold", "Bold", "bold")}
-                {tool("italic", "Italic", "italic")}
-                {tool("underline", "Underline", "underline")}
-                <span className="rte-divider"></span>
-                {tool("insertUnorderedList", "Bullet list", "list-ul")}
-                {tool("insertOrderedList", "Numbered list", "list-ol")}
-                <span className="rte-divider"></span>
-                {tool("createLink", "Insert link", "link")}
-                {tool("removeFormat", "Clear formatting", "eraser")}
-            </div>
+        <div className={`rte-wrapper${compact ? " is-compact" : ""}`}>
+            {compact ? null : (
+                <div className="rte-toolbar">
+                    {tool("bold", "Bold", "bold")}
+                    {tool("italic", "Italic", "italic")}
+                    {tool("underline", "Underline", "underline")}
+                    <span className="rte-divider"></span>
+                    {tool("insertUnorderedList", "Bullet list", "list-ul")}
+                    {tool("insertOrderedList", "Numbered list", "list-ol")}
+                    <span className="rte-divider"></span>
+                    {tool("createLink", "Insert link", "link")}
+                    {tool("removeFormat", "Clear formatting", "eraser")}
+                </div>
+            )}
             <div
                 ref={elRef}
                 className="rte-editor"
                 contentEditable="true"
                 data-placeholder={placeholder}
                 suppressContentEditableWarning
+                onKeyDown={onKeyDown}
             />
         </div>
     );

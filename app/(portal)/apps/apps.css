@@ -838,7 +838,7 @@
     background: rgba(15, 23, 42, 0.92);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    padding: 14px 0 calc(14px + var(--portal-dock-clearance, 100px) + env(safe-area-inset-bottom, 0px));
     margin: 0 calc(-1 * clamp(16px, 4vw, 24px));
     padding-left: clamp(16px, 4vw, 24px);
     padding-right: clamp(16px, 4vw, 24px);

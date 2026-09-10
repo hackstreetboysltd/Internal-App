@@ -10,6 +10,8 @@
     --text-muted: #9ca3af;
     --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* Space above the floating dock for sticky full-screen flow footers */
+    --portal-dock-clearance: 100px;
 }
 
 * {
@@ -283,8 +285,10 @@ body {
     justify-content: center;
     align-items: center;
     z-index: 9999;
-    padding: 20px;
+    /* Clear floating dock (modals live under dock's stacking context) */
+    padding: 20px 20px calc(20px + var(--portal-dock-clearance, 100px));
     box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .modal.show {
@@ -298,7 +302,7 @@ body {
     padding: 28px;
     width: 90%;
     max-width: 480px;
-    max-height: calc(100vh - 120px);
+    max-height: calc(100dvh - 80px - var(--portal-dock-clearance, 100px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -306,6 +310,7 @@ body {
     transform: scale(0.95);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
+    margin: auto;
 }
 
 .modal.show .modal-content {
@@ -933,6 +938,10 @@ body.module-open .active-bar {
     .content-viewport {
         padding: 10px;
         padding-bottom: 80px;
+    }
+
+    :root {
+        --portal-dock-clearance: 88px;
     }
 
     /* Adjust bottom navigation layout */

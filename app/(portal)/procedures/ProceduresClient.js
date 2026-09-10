@@ -8,6 +8,8 @@ import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
+import CreateProcedureFlow from "./CreateProcedureFlow";
+import StepsEditor from "./StepsEditor";
 
 const ITEMS_PER_PAGE = 5;
 const LEADERBOARD_ITEMS_PER_PAGE = 5;
@@ -126,103 +128,6 @@ function SkelCard() {
     );
 }
 
-function StepsEditor({ steps, setSteps, inputId }) {
-    const [draft, setDraft] = useState("");
-    const [editing, setEditing] = useState(null);
-    const [editText, setEditText] = useState("");
-    const dragFrom = useRef(null);
-
-    const addStep = () => {
-        const text = draft.trim();
-        if (!text) return;
-        setSteps([...steps, text]);
-        setDraft("");
-    };
-
-    const saveEdit = (idx) => {
-        const next = steps.slice();
-        next[idx] = editText.trim() || steps[idx];
-        setSteps(next);
-        setEditing(null);
-        setEditText("");
-    };
-
-    return (
-        <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                <input
-                    type="text"
-                    id={inputId}
-                    placeholder="Add a new step..."
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                            e.preventDefault();
-                            addStep();
-                        }
-                    }}
-                    style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem", marginBottom: 0 }}
-                />
-                <button
-                    type="button"
-                    onClick={addStep}
-                    style={{ width: "auto", background: "rgba(167, 139, 250, 0.1)", border: "1px solid rgba(167, 139, 250, 0.3)", color: ACCENT, padding: "8px 12px", borderRadius: 4, cursor: "pointer", fontSize: "0.85rem", marginBottom: 0, boxShadow: "none" }}
-                >
-                    <i className="fa-solid fa-plus"></i>
-                </button>
-            </div>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, minHeight: 50, maxHeight: 200, overflowY: "auto" }}>
-                {steps.map((text, idx) => (
-                    <li
-                        key={`${idx}-${text.slice(0, 12)}`}
-                        className="step-item"
-                        draggable
-                        onDragStart={() => { dragFrom.current = idx; }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={() => {
-                            const from = dragFrom.current;
-                            if (from == null || from === idx) return;
-                            const next = steps.slice();
-                            const [moved] = next.splice(from, 1);
-                            next.splice(idx, 0, moved);
-                            setSteps(next);
-                            dragFrom.current = null;
-                        }}
-                    >
-                        <i className="fa-solid fa-grip-vertical drag-handle"></i>
-                        {editing === idx ? (
-                            <input
-                                type="text"
-                                className="step-input"
-                                value={editText}
-                                autoFocus
-                                onChange={(e) => setEditText(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        saveEdit(idx);
-                                    }
-                                }}
-                            />
-                        ) : (
-                            <span className="step-content">{text}</span>
-                        )}
-                        <div className="step-actions">
-                            {editing === idx ? (
-                                <button type="button" className="step-btn" onClick={() => saveEdit(idx)}><i className="fa-solid fa-check"></i></button>
-                            ) : (
-                                <button type="button" className="step-btn" onClick={() => { setEditing(idx); setEditText(text); }}><i className="fa-solid fa-pen"></i></button>
-                            )}
-                            <button type="button" className="step-btn" onClick={() => setSteps(steps.filter((_, i) => i !== idx))}><i className="fa-solid fa-trash"></i></button>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </>
-    );
-}
-
 export default function ProceduresClient() {
     const router = useRouter();
     const { actor, isAdminView } = useSession();
@@ -238,7 +143,6 @@ export default function ProceduresClient() {
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [shareOpen, setShareOpen] = useState(false);
-    const [shareShown, setShareShown] = useState(false);
     const [lbOpen, setLbOpen] = useState(false);
     const [lbShown, setLbShown] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
@@ -363,23 +267,37 @@ export default function ProceduresClient() {
         }, 300);
     };
 
+    const openShare = () => {
+        const current = actorRef.current || { name: "A Team Member", email: "" };
+        if (!author.trim() && current.name) {
+            setAuthor(current.name);
+        }
+        setShareSteps([]);
+        setShareOpen(true);
+    };
+
     const addProcedure = () => runFormBusy(async () => {
         const name = author.trim();
         const guideTitle = title.trim();
         const steps = shareSteps.map((s) => s.trim()).filter(Boolean).join("\n");
         if (!name || !guideTitle || !steps) return alert("Your name, runbook title, and execution guide details are required");
 
+        const current = actorRef.current || { name: "A Team Member", email: "" };
         const list = await get("procedures");
         const next = Array.isArray(list) ? list.slice() : [];
-        next.push({ id: nextItemId(), author: name, title: guideTitle, steps });
+        next.push({
+            id: nextItemId(),
+            author: name,
+            title: guideTitle,
+            steps,
+            email: (current.email || "").trim().toLowerCase() || undefined,
+        });
         await saveProcedures(next);
-
-        const current = actorRef.current || { name: "A Team Member", email: "" };
 
         setAuthor("");
         setTitle("");
         setShareSteps([]);
-        closeModal(setShareOpen, setShareShown);
+        setShareOpen(false);
     });
 
     const deleteProcedure = async (id) => {
@@ -513,7 +431,7 @@ export default function ProceduresClient() {
                         </button>
                     </div>
                     <div className="header-actions-primary">
-                        <button type="button" onClick={() => { setShareSteps([]); openModal(setShareOpen, setShareShown); }} style={ACCENT_BTN}>
+                        <button type="button" onClick={openShare} style={ACCENT_BTN}>
                             Publish Guide
                         </button>
                     </div>
@@ -694,28 +612,19 @@ export default function ProceduresClient() {
                 </div>
             </ModuleModal>
 
-            <ModuleModal open={shareOpen} shown={shareShown} onBackdrop={() => closeModal(setShareOpen, setShareShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: ACCENT }}> Publish Procedure</h3>
-                        <span className="close-btn" onClick={() => closeModal(setShareOpen, setShareShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <label htmlFor="procAuthor" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>Your Name</label>
-                        <input type="text" id="procAuthor" placeholder="e.g. Alice" required value={author} onChange={(e) => setAuthor(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} />
-
-                        <label htmlFor="procTitle" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Guide Title</label>
-                        <input type="text" id="procTitle" placeholder="e.g. Setting up a new staging workspace" required value={title} onChange={(e) => setTitle(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} />
-
-                        <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Execution Steps</label>
-                        <StepsEditor steps={shareSteps} setSteps={setShareSteps} inputId="newProcStepInput" />
-
-                        <BusyButton type="button" busy={formBusy} busyLabel="Publishing…" onClick={addProcedure} style={{ marginTop: 20, background: ACCENT, borderColor: ACCENT, color: "white", fontWeight: 600, width: "100%" }}>
-                            Publish Procedure
-                        </BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {shareOpen ? (
+                <CreateProcedureFlow
+                    author={author}
+                    setAuthor={setAuthor}
+                    title={title}
+                    setTitle={setTitle}
+                    steps={shareSteps}
+                    setSteps={setShareSteps}
+                    busy={formBusy}
+                    onClose={() => setShareOpen(false)}
+                    onSubmit={addProcedure}
+                />
+            ) : null}
 
             <ModuleModal open={infoOpen} shown={infoShown} onBackdrop={() => closeModal(setInfoOpen, setInfoShown)}>
                 <div className="modal-content">

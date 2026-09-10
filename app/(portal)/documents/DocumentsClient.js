@@ -8,6 +8,7 @@ import { useSession, clearActiveModule } from "@/lib/session";
 import { nextPortalId, portalNowIso } from "@/lib/portalTime";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
+import CreateDocumentFlow from "./CreateDocumentFlow";
 import {
     ITEMS_PER_PAGE,
     MAX_FILE_BYTES,
@@ -15,8 +16,6 @@ import {
     canManageDocument,
     docIconForName,
     downloadAndOpenDocument,
-    fileExtension,
-    formatFileBytes,
     formatDocMeta,
     listLibraryItems,
     matchesLibrarySearch,
@@ -193,61 +192,6 @@ function DocNameEditor({ initialName, onCommit, onCancel }) {
             }}
             onBlur={() => finish(value)}
         />
-    );
-}
-
-function FileDrop({ inputRef, file, dragOver, setDragOver, onFile, stageState, stageProgress }) {
-    const ext = file ? (fileExtension(file.name).toUpperCase() || "FILE") : "";
-    const staging = stageState === "uploading";
-    const stageReady = stageState === "ready";
-    const stageFailed = stageState === "error";
-    const pct = Number.isFinite(stageProgress) ? Math.max(0, Math.min(100, stageProgress)) : 0;
-    const hint = staging
-        ? (pct > 0 ? `Uploading… ${pct}%` : "Uploading to library…")
-        : stageFailed
-            ? "Upload failed — click to retry"
-            : stageReady
-                ? "Ready · click to replace"
-                : "Click to replace";
-    return (
-        <label
-            className={`docs-drop${dragOver ? " dragover" : ""}${file ? " has-file" : ""}${staging ? " is-staging" : ""}${stageReady ? " is-staged" : ""}${stageFailed ? " is-stage-error" : ""}`}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                onFile(e.dataTransfer.files);
-            }}
-        >
-            {file ? (
-                <>
-                    <i className={docIconForName(file.name)} aria-hidden="true"></i>
-                    <span className="docs-drop-name">{file.name}</span>
-                    <span className="docs-drop-meta">{formatFileBytes(file.size)} · {ext}</span>
-                    <span className={`docs-drop-hint${staging ? " is-busy" : ""}`}>
-                        {staging ? <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> : null}
-                        {staging ? " " : null}
-                        {hint}
-                    </span>
-                    {staging ? (
-                        <span className="docs-drop-progress" aria-hidden="true">
-                            <span style={{ width: `${pct}%` }} />
-                        </span>
-                    ) : null}
-                </>
-            ) : (
-                <>
-                    <i className="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-                    <span>Drop a file here or click to choose</span>
-                </>
-            )}
-            <input
-                ref={inputRef}
-                type="file"
-                onChange={(e) => onFile(e.target.files)}
-            />
-        </label>
     );
 }
 
@@ -470,7 +414,6 @@ export default function DocumentsClient() {
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [uploadOpen, setUploadOpen] = useState(false);
-    const [uploadShown, setUploadShown] = useState(false);
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
     const [groupSaveOpen, setGroupSaveOpen] = useState(false);
@@ -743,6 +686,16 @@ export default function DocumentsClient() {
         if (uploadFileRef.current) uploadFileRef.current.value = "";
     };
 
+    const openUploadFlow = () => {
+        resetUploadForm();
+        setUploadOpen(true);
+    };
+
+    const closeUploadFlow = () => {
+        setUploadOpen(false);
+        resetUploadForm();
+    };
+
     const takeFile = (fileList) => {
         const file = Array.from(fileList || [])[0];
         if (!file) return;
@@ -807,7 +760,7 @@ export default function DocumentsClient() {
             setSaveAsName("");
             setDropOver(false);
             if (uploadFileRef.current) uploadFileRef.current.value = "";
-            closeModal(setUploadOpen, setUploadShown);
+            setUploadOpen(false);
         } catch (e) {
             console.error(e);
             alert(e.message || "Could not upload this file.");
@@ -1220,10 +1173,7 @@ export default function DocumentsClient() {
                             type="button"
                             style={ACCENT_BTN}
                             disabled={grouping}
-                            onClick={() => {
-                                resetUploadForm();
-                                openModal(setUploadOpen, setUploadShown);
-                            }}
+                            onClick={openUploadFlow}
                         >
                             Upload
                         </button>
@@ -1396,46 +1346,22 @@ export default function DocumentsClient() {
                 )}
             </div>
 
-            <ModuleModal open={uploadOpen} shown={uploadShown} onBackdrop={() => closeModal(setUploadOpen, setUploadShown, resetUploadForm)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto" }}>Upload</h3>
-                        <span className="close-btn" onClick={() => closeModal(setUploadOpen, setUploadShown, resetUploadForm)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <FileDrop
-                            inputRef={uploadFileRef}
-                            file={pickedFile}
-                            dragOver={dropOver}
-                            setDragOver={setDropOver}
-                            onFile={takeFile}
-                            stageState={pickedFile ? stageState : "idle"}
-                            stageProgress={stageProgress}
-                        />
-                        {pickedFile ? (
-                            <SaveAsInput
-                                key={`${pickedFile.name}-${pickedFile.size}-${pickedFile.lastModified}`}
-                                value={saveAsName}
-                                onChange={setSaveAsName}
-                                onSubmit={() => { if (!saving && stageState === "ready") uploadDocuments(); }}
-                            />
-                        ) : null}
-                        <BusyButton
-                            type="button"
-                            busy={saving || stageState === "uploading"}
-                            busyLabel={
-                                saving
-                                    ? "Saving…"
-                                    : (stageProgress > 0 ? `Uploading… ${stageProgress}%` : "Uploading…")
-                            }
-                            onClick={uploadDocuments}
-                            disabled={!pickedFile || stageState !== "ready"}
-                        >
-                            Upload
-                        </BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {uploadOpen ? (
+                <CreateDocumentFlow
+                    pickedFile={pickedFile}
+                    saveAsName={saveAsName}
+                    setSaveAsName={setSaveAsName}
+                    dropOver={dropOver}
+                    setDropOver={setDropOver}
+                    onFile={takeFile}
+                    inputRef={uploadFileRef}
+                    stageState={stageState}
+                    stageProgress={stageProgress}
+                    busy={saving || stageState === "uploading"}
+                    onClose={closeUploadFlow}
+                    onSubmit={uploadDocuments}
+                />
+            ) : null}
 
             <ModuleModal
                 open={groupSaveOpen}

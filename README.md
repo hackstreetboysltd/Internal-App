@@ -8,7 +8,7 @@ Next.js server-backed internal portal with Google OAuth, PostgreSQL, Redis, and 
 - **Session UI keys:** `activeModule`, `isAdminView`, `messages.vault.*`, `portalTabSessionId` in sessionStorage only — not auth state.
 - **Data:** PostgreSQL via `/api/data/*` and `/api/sync/*`; portal modules use `lib/portalApi.js` → HTTP + `lib/cacheManager.js`.
 - **Visual:** Reuse existing module CSS. No Tailwind or component-library redesign.
-- **Messages:** Do not change encryption in `messages/crypto.js`.
+- **Messages:** Client-side hybrid sealed envelopes in `messages/crypto.js` (ENC v5: ECDH P-256 + ML-KEM-768). Successful edits persist `editedAt` and show an Edited badge on the bubble (original send time stays). Do not weaken wrap types or lower `ENC_VERSION` without a migration plan. New group-channel members and new message recipients get a generic EmailJS notice (no ciphertext, no sender name). Opening a DM does not send the channel-added mail.
 - **Admin UX:** Header admin toggle; messages dock becomes Role Access in admin view; observability at `/admin/observability/`.
 - **Host:** Vercel (Next.js) + Neon (Postgres) + Upstash (Redis). See [docs/RUNBOOK.md](docs/RUNBOOK.md).
 - **Firebase:** Retained **only** for GitHub OAuth in `/github-connect/` (Apps changelogs). All module data is in Postgres.
@@ -64,6 +64,7 @@ npm run test:phase5   # activity tracking
 npm run test:phase6   # admin observability APIs
 npm run test:phase7   # Firestore migration script
 npm run test:phase8   # session kill, rotation, retention
+npm run test:secure-notices  # channel-add + new-message email intents
 npm run test:load     # concurrent health / 401 burst
 npm run jobs:retention  # log retention + hourly rollup
 ```
@@ -81,6 +82,7 @@ npm run jobs:retention  # log retention + hourly rollup
 | `/calendar/` | Calendar + meetings |
 | `/goals/`, `/goals/all/` | Goals workspace |
 | `/messages/` | Encrypted messages |
+| `/channels/` | Communication channels (admin) |
 | `/role-access/` | Admin role access (dock swap) |
 | `/admin/observability/` | Admin live API + activity monitor |
 | `/github-connect/` | GitHub OAuth popup (Firebase Auth) |

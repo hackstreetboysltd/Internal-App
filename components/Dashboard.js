@@ -8,6 +8,7 @@ import { saveActiveModule } from "@/lib/session";
 const CARDS = [
     { key: "apps", title: "Apps", icon: "fa-solid fa-layer-group" },
     { key: "messages", title: "Messages", icon: "fa-solid fa-comments", cardId: "dashMessagesCard" },
+    { key: "channels", title: "Channels", icon: "fa-solid fa-sitemap", adminOnly: true },
     { key: "calendar", title: "Calendar", icon: "fa-regular fa-calendar" },
     { key: "goals", title: "Goals", icon: "fa-solid fa-bullseye" },
     { key: "skills", title: "Skills", icon: "fa-solid fa-brain" },
@@ -46,7 +47,7 @@ export default function Dashboard() {
     return (
         <div id="welcomeScreen" className="welcome-screen">
             <div className="dashboard-grid">
-                {CARDS.map((card) => {
+                {CARDS.filter((card) => !card.adminOnly || isAdminView).map((card) => {
                     const isMessages = card.key === "messages";
                     const title = isMessages && isAdminView ? "Role Access" : card.title;
                     const icon = isMessages && isAdminView ? "fa-solid fa-user-lock" : card.icon;

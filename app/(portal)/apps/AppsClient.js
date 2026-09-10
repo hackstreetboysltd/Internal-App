@@ -7,10 +7,9 @@ import { nextPortalId } from "@/lib/portalTime";
 import { trackActivity } from "@/lib/activityTracker";
 import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
-import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
-import RteEditor from "./RteEditor";
 import EditAppFlow from "./EditAppFlow";
+import CreateAppFlow from "./CreateAppFlow";
 import { getEditorHtml, stripHtml } from "./html";
 
 function nextItemId() {
@@ -122,7 +121,6 @@ export default function AppsClient() {
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [registerOpen, setRegisterOpen] = useState(false);
-    const [registerShown, setRegisterShown] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [infoOpen, setInfoOpen] = useState(false);
     const [infoShown, setInfoShown] = useState(false);
@@ -216,7 +214,11 @@ export default function AppsClient() {
         setAppGithubRepo("");
         setAppLiveUrl("");
         setRegisterSeed((n) => n + 1);
-        openModal(setRegisterOpen, setRegisterShown);
+        setRegisterOpen(true);
+    };
+
+    const closeRegister = () => {
+        setRegisterOpen(false);
     };
 
     const addApp = () => runFormBusy(async () => {
@@ -237,13 +239,14 @@ export default function AppsClient() {
             githubRepo: githubRepo || null,
             liveUrl: liveUrl || null,
             author: current.name,
+            email: (current.email || "").trim().toLowerCase() || undefined,
         });
         await saveApps(next);
 
         setAppName("");
         setAppGithubRepo("");
         setAppLiveUrl("");
-        closeModal(setRegisterOpen, setRegisterShown);
+        closeRegister();
     });
 
     const deleteApp = async (appId) => {
@@ -541,34 +544,21 @@ export default function AppsClient() {
                 )}
             </div>
 
-            <ModuleModal open={registerOpen} shown={registerShown} onBackdrop={() => closeModal(setRegisterOpen, setRegisterShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto" }}>Register New App</h3>
-                        <span className="close-btn" onClick={() => closeModal(setRegisterOpen, setRegisterShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <label htmlFor="appName" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>App Name</label>
-                        <input type="text" id="appName" placeholder="e.g. HR Portal Dashboard" value={appName} onChange={(e) => setAppName(e.target.value)} required />
-
-                        <label style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>App Description</label>
-                        <RteEditor
-                            seedKey={registerSeed}
-                            initialHtml=""
-                            placeholder="e.g. Backoffice tool managing employee documents and time-off tracking."
-                            editorRef={registerEditorRef}
-                        />
-
-                        <label htmlFor="appGithubRepo" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>GitHub Repo (optional)</label>
-                        <input type="text" id="appGithubRepo" placeholder="e.g. octocat/hello-world" value={appGithubRepo} onChange={(e) => setAppGithubRepo(e.target.value)} />
-
-                        <label htmlFor="appLiveUrl" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 12 }}>Live URL (optional)</label>
-                        <input type="url" id="appLiveUrl" placeholder="e.g. https://app.example.com" value={appLiveUrl} onChange={(e) => setAppLiveUrl(e.target.value)} />
-
-                        <BusyButton type="button" busy={formBusy} busyLabel="Registering…" onClick={addApp}> Register App</BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {registerOpen ? (
+                <CreateAppFlow
+                    appName={appName}
+                    setAppName={setAppName}
+                    githubRepo={appGithubRepo}
+                    setGithubRepo={setAppGithubRepo}
+                    liveUrl={appLiveUrl}
+                    setLiveUrl={setAppLiveUrl}
+                    seedKey={registerSeed}
+                    editorRef={registerEditorRef}
+                    busy={formBusy}
+                    onClose={closeRegister}
+                    onSubmit={addApp}
+                />
+            ) : null}
 
             {editOpen ? (
                 <EditAppFlow
@@ -609,7 +599,7 @@ export default function AppsClient() {
                             </h4>
                             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 9 }}>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Search registered apps by name or description.</span></li>
-                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Register a new app with a rich-text description, optional GitHub repo, and live URL.</span></li>
+                                <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Register a new app through a details → review flow, with optional GitHub repo, live URL, and security level (B general / A admin).</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Open an app&apos;s GitHub repo or live site from the card buttons.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Edit an existing app&apos;s details or delete outdated entries.</span></li>
                                 <li style={{ display: "flex", alignItems: "flex-start", gap: 8 }}><i className="fa-solid fa-circle-check" style={{ color: "#6366f1", marginTop: 3, flexShrink: 0 }}></i><span>Click any app card to open its full detail page with changelogs and tickets.</span></li>

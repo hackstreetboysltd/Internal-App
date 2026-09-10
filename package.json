@@ -24,9 +24,18 @@
     "test:phase5": "node scripts/test-phase5.mjs",
     "test:phase6": "node scripts/test-phase6.mjs",
     "test:phase7": "node scripts/test-phase7.mjs",
-    "test:phase8": "node scripts/test-phase8.mjs"
+    "test:phase8": "node scripts/test-phase8.mjs",
+    "test:security-level": "node --import ./scripts/alias-loader.mjs scripts/test-security-level.mjs",
+    "test:channel-membership": "node --import ./scripts/alias-loader.mjs scripts/test-channel-membership.mjs",
+    "test:dm-channels": "node --import ./scripts/alias-loader.mjs scripts/test-dm-channels.mjs",
+    "test:message-save": "node --import ./scripts/alias-loader.mjs scripts/test-message-save.mjs",
+    "test:message-security": "node --import ./scripts/alias-loader.mjs scripts/test-message-security.mjs",
+    "test:hybrid-crypto": "node --import ./scripts/alias-loader.mjs scripts/test-hybrid-crypto.mjs",
+    "test:secure-notices": "node --import ./scripts/alias-loader.mjs scripts/test-secure-notices.mjs",
+    "wipe:messages": "node scripts/wipe-messages.mjs"
   },
   "dependencies": {
+    "@noble/post-quantum": "^0.5.4",
     "docx-preview": "^0.4.0",
     "firebase": "^10.12.2",
     "ioredis": "^5.6.1",

@@ -1,3 +1,16 @@
+export function isSafeHref(href) {
+    const raw = String(href || "").trim();
+    if (!raw) return false;
+    // Protocol-relative and scheme-less paths are fine; block dangerous schemes.
+    if (/^\/(?!\/)/.test(raw) || raw.startsWith("#") || raw.startsWith("?")) return true;
+    try {
+        const url = new URL(raw, "https://example.invalid");
+        return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:";
+    } catch {
+        return false;
+    }
+}
+
 // Allow-list sanitizer for app descriptions. Runs on save, not on every
 // keystroke, so it does not fight the user while they type.
 export function sanitizeHtml(html) {
@@ -15,9 +28,15 @@ export function sanitizeHtml(html) {
                     return;
                 }
                 [...child.attributes].forEach((attr) => {
-                    if (!(child.tagName === "A" && attr.name === "href")) {
-                        child.removeAttribute(attr.name);
+                    if (child.tagName === "A" && attr.name === "href") {
+                        if (!isSafeHref(attr.value)) {
+                            child.removeAttribute("href");
+                        } else {
+                            child.setAttribute("rel", "noopener noreferrer");
+                        }
+                        return;
                     }
+                    child.removeAttribute(attr.name);
                 });
                 walk(child);
             }

@@ -76,6 +76,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: |
+          node --import ./scripts/alias-loader.mjs scripts/test-email-copy.mjs
+          npm run test:secure-notices
+
       - name: Build (server mode)
         run: npm run build
 

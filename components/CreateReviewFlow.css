@@ -1,0 +1,357 @@
+.create-review-flow {
+  --create-sheet-bg: color-mix(in srgb, var(--bg-primary, #0a0f1d) 72%, #1a2438);
+  --create-sheet-line: rgba(255, 255, 255, 0.1);
+  --create-sheet-ink: var(--text-main, #f3f4f6);
+  --create-sheet-mute: var(--text-muted, #9ca3af);
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px 12px calc(12px + var(--portal-dock-clearance, 100px) + env(safe-area-inset-bottom, 0px));
+  background: rgba(4, 8, 18, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: createReviewFadeIn 0.22s ease-out;
+}
+
+@keyframes createReviewFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes createReviewSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.create-review-flow-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 460px);
+  max-height: 100%;
+  min-height: 0;
+  background: var(--create-sheet-bg);
+  border: 1px solid var(--create-sheet-line);
+  border-radius: 20px;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: createReviewSheetIn 0.28s ease-out;
+}
+
+.create-review-flow-header {
+  flex-shrink: 0;
+  padding: 16px 16px 0;
+}
+
+.create-review-flow-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.create-review-flow-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.create-review-flow .create-review-flow-sheet button {
+  all: unset;
+  box-sizing: border-box;
+  font-family: inherit;
+  cursor: pointer;
+  transform: none;
+  box-shadow: none;
+}
+
+.create-review-flow .create-review-flow-sheet button:hover {
+  transform: none;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-icon-btn,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--create-sheet-mute);
+  font-size: 1rem;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-icon-btn:hover:not(:disabled),
+.create-review-flow .create-review-flow-sheet button.create-review-flow-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--create-sheet-ink);
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-icon-btn:focus-visible,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-close:focus-visible,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-back:focus-visible,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-primary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent, #6366f1) 80%, white);
+  outline-offset: 2px;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-icon-btn:disabled,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.create-review-flow-title {
+  margin: 0;
+  font-family: Outfit, var(--font-heading, sans-serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--create-sheet-ink);
+  line-height: 1.3;
+}
+
+.create-review-flow-hint {
+  margin: 4px 0 0;
+  font-size: 0.84rem;
+  color: var(--create-sheet-mute);
+  line-height: 1.45;
+}
+
+.create-review-flow-progress {
+  display: flex;
+  gap: 5px;
+  margin: 14px 0 0;
+}
+
+.create-review-flow-progress-seg {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.25s ease;
+}
+
+.create-review-flow-progress-seg.active {
+  background: var(--accent, #6366f1);
+}
+
+.create-review-flow-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 16px 8px;
+}
+
+.create-review-flow-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-review-field {
+  display: block;
+}
+
+.create-review-field-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--create-sheet-mute);
+  margin-bottom: 8px;
+}
+
+.create-review-flow-fields input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]),
+.create-review-flow-fields textarea,
+.create-review-flow-fields select {
+  margin-bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.create-review-flow-fields input[type="radio"],
+.create-review-flow-fields input[type="checkbox"] {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  flex: none;
+}
+
+.create-review-flow-fields .rte-wrapper {
+  margin-bottom: 0;
+}
+
+.create-review-flow-error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 0.88rem;
+}
+
+.create-review-review {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.create-review-preview {
+  pointer-events: none;
+}
+
+.create-review-preview-meta {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  word-break: break-word;
+}
+
+.create-review-details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.create-review-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.create-review-row-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+}
+
+.create-review-row-value {
+  font-size: 0.92rem;
+  color: #e2e8f0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.create-review-row--changed .create-review-row-value {
+  color: white;
+}
+
+.create-review-row-badge {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  vertical-align: middle;
+}
+
+.create-review-flow-footer {
+  flex-shrink: 0;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--create-sheet-line);
+}
+
+.create-review-flow-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-back:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-back:disabled,
+.create-review-flow .create-review-flow-sheet button.create-review-flow-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-primary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 82%, #0b1020);
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 0.92rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transition: filter 0.15s ease;
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.create-review-flow .create-review-flow-sheet button.create-review-flow-primary.with-back {
+  flex: 1;
+}
+
+@media (min-width: 720px) {
+  .create-review-flow {
+    align-items: center;
+    padding: 24px 24px calc(24px + var(--portal-dock-clearance, 100px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-review-flow,
+  .create-review-flow-sheet {
+    animation: none;
+  }
+}

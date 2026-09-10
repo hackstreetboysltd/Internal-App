@@ -7,6 +7,8 @@ import { portalDateParts, portalNowIso } from "@/lib/portalTime";
 import { useSession, clearActiveModule } from "@/lib/session";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
+import CreateEventFlow from "./CreateEventFlow";
+import CreateMeetingFlow from "./CreateMeetingFlow";
 import {
     MAX_INLINE_FILE_BYTES,
     MONTH_NAMES,
@@ -137,9 +139,7 @@ export default function CalendarClient() {
     const [addMenuOpen, setAddMenuOpen] = useState(false);
 
     const [eventOpen, setEventOpen] = useState(false);
-    const [eventShown, setEventShown] = useState(false);
     const [meetingOpen, setMeetingOpen] = useState(false);
-    const [meetingShown, setMeetingShown] = useState(false);
     const [eventDetailOpen, setEventDetailOpen] = useState(false);
     const [eventDetailShown, setEventDetailShown] = useState(false);
     const [meetingDetailOpen, setMeetingDetailOpen] = useState(false);
@@ -352,20 +352,30 @@ export default function CalendarClient() {
 
     const openAddEvent = () => {
         setAddMenuOpen(false);
-        setEvAuthor("");
+        const current = actorRef.current || {};
+        setEvAuthor(current.name || "");
         setEvTitle("");
         setEvDate(selectedDateStr || "");
         setEvLoc("");
-        openModal(setEventOpen, setEventShown);
+        setEventOpen(true);
+    };
+
+    const closeAddEvent = () => {
+        setEventOpen(false);
     };
 
     const openAddMeeting = () => {
         setAddMenuOpen(false);
-        setMAuthor("");
+        const current = actorRef.current || {};
+        setMAuthor(current.name || "");
         setMTime(selectedDateStr ? `${selectedDateStr}T09:00` : "");
         setMLink("");
         setMAgenda("");
-        openModal(setMeetingOpen, setMeetingShown);
+        setMeetingOpen(true);
+    };
+
+    const closeAddMeeting = () => {
+        setMeetingOpen(false);
     };
 
     const addEvent = () => runFormBusy(async () => {
@@ -375,8 +385,17 @@ export default function CalendarClient() {
         const loc = evLoc.trim();
         if (!author || !title || !date || !loc) return alert("Please complete all form fields");
 
+        const current = actorRef.current || { name: "A Team Member", email: "" };
         const list = persistableCollection(await get("calendar"));
-        list.push({ id: nextItemId(), author, title, date, loc, documents: [] });
+        list.push({
+            id: nextItemId(),
+            author,
+            title,
+            date,
+            loc,
+            documents: [],
+            email: (current.email || "").trim().toLowerCase() || undefined,
+        });
         setSelectedDateStr(date);
         const [y, m] = date.split("-").map(Number);
         setCalYear(y);
@@ -384,9 +403,11 @@ export default function CalendarClient() {
         setDayViewOpen(true);
         await saveEvents(list);
 
-        const current = actorRef.current || { name: "A Team Member", email: "" };
-        setEvAuthor(""); setEvTitle(""); setEvDate(""); setEvLoc("");
-        closeModal(setEventOpen, setEventShown);
+        setEvAuthor("");
+        setEvTitle("");
+        setEvDate("");
+        setEvLoc("");
+        closeAddEvent();
     });
 
     const addMeeting = () => runFormBusy(async () => {
@@ -396,8 +417,18 @@ export default function CalendarClient() {
         const agenda = mAgenda.trim();
         if (!author || !time || !link || !agenda) return alert("Fill in all fields");
 
+        const current = actorRef.current || { name: "A Team Member", email: "" };
         const list = persistableCollection(await get("meetings"));
-        list.push({ id: nextItemId(), author, time, link, agenda, minutes: "", documents: [] });
+        list.push({
+            id: nextItemId(),
+            author,
+            time,
+            link,
+            agenda,
+            minutes: "",
+            documents: [],
+            email: (current.email || "").trim().toLowerCase() || undefined,
+        });
         const dateStr = toDateStr(time);
         setSelectedDateStr(dateStr);
         const [y, m] = dateStr.split("-").map(Number);
@@ -406,9 +437,11 @@ export default function CalendarClient() {
         setDayViewOpen(true);
         await saveMeetings(list);
 
-        const current = actorRef.current || { name: "A Team Member", email: "" };
-        setMAuthor(""); setMTime(""); setMLink(""); setMAgenda("");
-        closeModal(setMeetingOpen, setMeetingShown);
+        setMAuthor("");
+        setMTime("");
+        setMLink("");
+        setMAgenda("");
+        closeAddMeeting();
     });
 
     const saveEditEvent = () => runFormBusy(async () => {
@@ -1055,37 +1088,37 @@ export default function CalendarClient() {
                 </div>
             </ModuleModal>
 
-            <ModuleModal open={eventOpen} shown={eventShown} onBackdrop={() => closeModal(setEventOpen, setEventShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: "#f472b6" }}>Add Event</h3>
-                        <span className="close-btn" onClick={() => closeModal(setEventOpen, setEventShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <Field id="evAuthor" label="Organizer Name"><input type="text" id="evAuthor" placeholder="e.g. Alice" value={evAuthor} onChange={(e) => setEvAuthor(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="evTitle" label="Event Name" style={{ marginTop: 14 }}><input type="text" id="evTitle" placeholder="e.g. Q3 All Hands Sync" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="evDate" label="Event Date" style={{ marginTop: 14 }}><input type="date" id="evDate" value={evDate} onChange={(e) => setEvDate(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="evLoc" label="Location / Virtual Link" style={{ marginTop: 14 }}><input type="text" id="evLoc" placeholder="e.g. Google Meet URL or conference room name" value={evLoc} onChange={(e) => setEvLoc(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <BusyButton type="button" busy={formBusy} busyLabel="Adding…" onClick={addEvent} style={{ marginTop: 20, background: "#f472b6", borderColor: "#f472b6", fontWeight: 600, width: "100%" }}>Add to Calendar</BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {eventOpen ? (
+                <CreateEventFlow
+                    author={evAuthor}
+                    setAuthor={setEvAuthor}
+                    title={evTitle}
+                    setTitle={setEvTitle}
+                    date={evDate}
+                    setDate={setEvDate}
+                    loc={evLoc}
+                    setLoc={setEvLoc}
+                    busy={formBusy}
+                    onClose={closeAddEvent}
+                    onSubmit={addEvent}
+                />
+            ) : null}
 
-            <ModuleModal open={meetingOpen} shown={meetingShown} onBackdrop={() => closeModal(setMeetingOpen, setMeetingShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto", color: "#818cf8" }}>Schedule Meeting</h3>
-                        <span className="close-btn" onClick={() => closeModal(setMeetingOpen, setMeetingShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <Field id="mAuthor" label="Your Name"><input type="text" id="mAuthor" placeholder="e.g. Alice" value={mAuthor} onChange={(e) => setMAuthor(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="mTime" label="Date & Time" style={{ marginTop: 14 }}><input type="datetime-local" id="mTime" value={mTime} onChange={(e) => setMTime(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="mLink" label="Meeting URL" style={{ marginTop: 14 }}><input type="url" id="mLink" placeholder="e.g. https://meet.google.com/abc-defg-hij" value={mLink} onChange={(e) => setMLink(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <Field id="mAgenda" label="Meeting Agenda" style={{ marginTop: 14 }}><textarea id="mAgenda" placeholder="Specify key topics and goals..." value={mAgenda} onChange={(e) => setMAgenda(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }} /></Field>
-                        <BusyButton type="button" busy={formBusy} busyLabel="Scheduling…" onClick={addMeeting} style={{ marginTop: 20, background: "#818cf8", borderColor: "#818cf8", color: "white", fontWeight: 600, width: "100%" }}>Schedule Meeting</BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {meetingOpen ? (
+                <CreateMeetingFlow
+                    author={mAuthor}
+                    setAuthor={setMAuthor}
+                    time={mTime}
+                    setTime={setMTime}
+                    link={mLink}
+                    setLink={setMLink}
+                    agenda={mAgenda}
+                    setAgenda={setMAgenda}
+                    busy={formBusy}
+                    onClose={closeAddMeeting}
+                    onSubmit={addMeeting}
+                />
+            ) : null}
 
             <ModuleModal open={editEventOpen} shown={editEventShown} onBackdrop={() => closeModal(setEditEventOpen, setEditEventShown)}>
                 <div className="modal-content">

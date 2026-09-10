@@ -6,7 +6,7 @@ import "./itemMenu.css";
 
 const OPEN_EVENT = "portal-item-menu-open";
 
-export default function ItemMenu({ items, align = "end", title = "Options" }) {
+export default function ItemMenu({ items, align = "end", title = "Options", icon = "fa-solid fa-ellipsis" }) {
     const [open, setOpen] = useState(false);
     const [coords, setCoords] = useState(null);
     const [mounted, setMounted] = useState(false);
@@ -138,7 +138,7 @@ export default function ItemMenu({ items, align = "end", title = "Options" }) {
                         });
                     }}
                 >
-                    <i className="fa-solid fa-ellipsis" aria-hidden="true"></i>
+                    <i className={icon} aria-hidden="true"></i>
                 </button>
             </span>
             {dropdown}

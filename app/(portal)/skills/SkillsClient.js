@@ -8,6 +8,7 @@ import { useSession, clearActiveModule } from "@/lib/session";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
+import CreateSkillFlow from "./CreateSkillFlow";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -131,7 +132,6 @@ export default function SkillsClient() {
     const [refreshSpin, setRefreshSpin] = useState(false);
 
     const [shareOpen, setShareOpen] = useState(false);
-    const [shareShown, setShareShown] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailShown, setDetailShown] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
@@ -240,21 +240,36 @@ export default function SkillsClient() {
         }, 300);
     };
 
+    const openShare = () => {
+        const current = actorRef.current || { name: "A Team Member", email: "" };
+        if (!contribName.trim() && current.name) {
+            setContribName(current.name);
+        }
+        setShareOpen(true);
+    };
+
     const addSkill = () => runFormBusy(async () => {
         const author = contribName.trim();
         const title = skillTitle.trim();
         const body = skillDesc.trim();
         if (!author || !title || !body) return alert("Fill in all sections of the form");
 
+        const current = actorRef.current || { name: "A Team Member", email: "" };
         const list = await get("skills");
         const next = Array.isArray(list) ? list.slice() : [];
-        next.push({ id: nextItemId(), author, title, body });
+        next.push({
+            id: nextItemId(),
+            author,
+            title,
+            body,
+            email: (current.email || "").trim().toLowerCase() || undefined,
+        });
         await saveSkills(next);
 
         setContribName("");
         setSkillTitle("");
         setSkillDesc("");
-        closeModal(setShareOpen, setShareShown);
+        setShareOpen(false);
     });
 
     const deleteSkill = async (id) => {
@@ -383,7 +398,7 @@ export default function SkillsClient() {
                         />
                     </div>
                     <div className="header-actions-primary">
-                        <button type="button" onClick={() => openModal(setShareOpen, setShareShown)} style={ACCENT_BTN}>
+                        <button type="button" onClick={openShare} style={ACCENT_BTN}>
                             Share Skill
                         </button>
                     </div>
@@ -496,28 +511,19 @@ export default function SkillsClient() {
                 </div>
             </ModuleModal>
 
-            <ModuleModal open={shareOpen} shown={shareShown} onBackdrop={() => closeModal(setShareOpen, setShareShown)}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 style={{ margin: "0 auto" }}> Share Skill</h3>
-                        <span className="close-btn" onClick={() => closeModal(setShareOpen, setShareShown)}>&times;</span>
-                    </div>
-                    <div className="modal-body">
-                        <label htmlFor="contribName" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>Your Name</label>
-                        <input type="text" id="contribName" placeholder="e.g. Alice" required value={contribName} onChange={(e) => setContribName(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} />
-
-                        <label htmlFor="skillTitle" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Skill Title</label>
-                        <input type="text" id="skillTitle" placeholder="e.g. Clean Git Rebase Workflow" required value={skillTitle} onChange={(e) => setSkillTitle(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem" }} />
-
-                        <label htmlFor="skillDesc" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6, marginTop: 14 }}>Guidance Details</label>
-                        <textarea id="skillDesc" placeholder="Describe the skills, commands, or advice clearly..." required value={skillDesc} onChange={(e) => setSkillDesc(e.target.value)} style={{ minHeight: 100, padding: "8px 12px", fontSize: "0.85rem" }}></textarea>
-
-                        <BusyButton type="button" busy={formBusy} busyLabel="Publishing…" onClick={addSkill} style={{ marginTop: 20, background: "#fbbf24", borderColor: "#fbbf24", color: "#1e1b4b", fontWeight: 600, width: "100%" }}>
-                            Publish Skill
-                        </BusyButton>
-                    </div>
-                </div>
-            </ModuleModal>
+            {shareOpen ? (
+                <CreateSkillFlow
+                    contribName={contribName}
+                    setContribName={setContribName}
+                    skillTitle={skillTitle}
+                    setSkillTitle={setSkillTitle}
+                    skillDesc={skillDesc}
+                    setSkillDesc={setSkillDesc}
+                    busy={formBusy}
+                    onClose={() => setShareOpen(false)}
+                    onSubmit={addSkill}
+                />
+            ) : null}
 
             <ModuleModal open={infoOpen} shown={infoShown} onBackdrop={() => closeModal(setInfoOpen, setInfoShown)}>
                 <div className="modal-content">

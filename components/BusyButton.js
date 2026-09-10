@@ -2,6 +2,7 @@
 
 /**
  * Primary action button that disables and shows a spinner while work is in flight.
+ * Pass an empty `busyLabel` for an icon-only busy state (circular send buttons).
  */
 export default function BusyButton({
   busy = false,
@@ -14,6 +15,7 @@ export default function BusyButton({
   ...props
 }) {
   const isBusy = Boolean(busy);
+  const label = typeof busyLabel === "string" ? busyLabel.trim() : busyLabel;
   return (
     <button
       type={type}
@@ -26,8 +28,7 @@ export default function BusyButton({
       {isBusy ? (
         <>
           <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
-          {" "}
-          {busyLabel}
+          {label ? <>{" "}{label}</> : null}
         </>
       ) : children}
     </button>

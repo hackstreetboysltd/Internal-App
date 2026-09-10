@@ -9,6 +9,7 @@ import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
+import CreateGoalFlow from "./CreateGoalFlow";
 import {
     HORIZONS,
     HORIZON_OPTIONS,
@@ -529,7 +530,8 @@ export default function GoalsClient() {
             const filteredEmail = memberFilter !== "all" ? memberFilter : "";
             setAssigneeEmail(filteredEmail && emails.includes(filteredEmail) ? filteredEmail : (emails[0] || ""));
         }
-        openModal(setUnifiedOpen, setUnifiedShown);
+        setUnifiedShown(false);
+        setUnifiedOpen(true);
     };
 
     useEffect(() => {
@@ -560,6 +562,15 @@ export default function GoalsClient() {
     }, [isAdminView, records]);
 
     const closeUnified = () => {
+        if (!editingId) {
+            setUnifiedOpen(false);
+            setEditingId(null);
+            setEditingGoalIndex(null);
+            setDraftItems([]);
+            setEditingKey(null);
+            clearEditor();
+            return;
+        }
         closeModal(setUnifiedOpen, setUnifiedShown, () => {
             setEditingId(null);
             setEditingGoalIndex(null);
@@ -1331,7 +1342,7 @@ export default function GoalsClient() {
                 )}
             </div>
 
-            <ModuleModal open={unifiedOpen} shown={unifiedShown} onBackdrop={closeUnified}>
+            <ModuleModal open={unifiedOpen && !!editingId} shown={unifiedShown} onBackdrop={closeUnified}>
                 <div className={`modal-content${isAdminView ? " admin-modal" : ""}`}>
                     <div className="modal-header">
                         <h3 style={{ margin: "0 auto", color: ACCENT }}>{unifiedTitle}</h3>
@@ -1380,6 +1391,29 @@ export default function GoalsClient() {
                     </div>
                 </div>
             </ModuleModal>
+
+            {unifiedOpen && !editingId ? (
+                <CreateGoalFlow
+                    horizon={horizon}
+                    setHorizon={(v) => { setHorizon(v); setCurrentTab(v); }}
+                    horizonOptions={horizonOptions}
+                    draftItems={draftItems}
+                    editingKey={editingKey}
+                    editText={editText}
+                    goalEditor={mentionsBlock}
+                    draftList={draftList}
+                    isAdminView={isAdminView}
+                    scope={scope}
+                    setScope={setScope}
+                    assigneeEmail={assigneeEmail}
+                    setAssigneeEmail={setAssigneeEmail}
+                    assigneeOptions={assigneeOptions}
+                    busy={formBusy}
+                    onClose={closeUnified}
+                    onSubmit={saveUnifiedGoal}
+                    onShowRequirements={() => openModal(setInfoOpen, setInfoShown)}
+                />
+            ) : null}
 
             {validationModal}
 

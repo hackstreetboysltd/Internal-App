@@ -96,6 +96,8 @@ Required in production:
 
 Optional: `GOOGLE_HD`, rate-limit overrides, `API_LOG_RETENTION_DAYS` (default 30), `ACTIVITY_LOG_RETENTION_DAYS` (default 90), `SESSION_ROTATE_AFTER_SEC` (default 86400; `0` disables).
 
+EmailJS (`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, plus `NEXT_PUBLIC_PORTAL_URL` / `APP_URL` for the CTA) is optional locally. When those are set, new group-channel members get “You have been added to this secure channel. Check it out”, and recipients of a new channel or DM message get “You have received a secure message. Check it out”. The mail never includes ciphertext or the message body. Starting a DM does not send the channel-added notice. If EmailJS is unset, in-app notices still land and the email is skipped.
+
 ## Sessions
 
 - HttpOnly, SameSite=Lax, Secure in production, path `/Internal-App`, 7-day sliding TTL.
@@ -140,7 +142,8 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 - SQL uses parameterized queries; collection names are allowlisted
 - Admin APIs require `roles` to include `admin`
 - Rate limits on `/api/*` via Redis sliding windows
-- Message ciphertext is unchanged (`messages/crypto.js`)
+- Message ciphertext uses client-side hybrid sealed envelopes (`messages/crypto.js`, ENC v5)
+- Successful message edits persist `editedAt` and render an Edited badge; unchanged rows in a collection re-save are not marked edited
 
 ## Load check
 
