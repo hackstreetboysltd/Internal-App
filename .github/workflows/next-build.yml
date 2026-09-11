@@ -85,6 +85,7 @@ jobs:
           npm run test:message-security
           npm run test:http-error-detail
           npm run test:email-fetch
+          npm run test:portal-url
           npm run test:prod-send-guards
 
       - name: Build (server mode)

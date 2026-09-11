@@ -96,7 +96,7 @@ Required in production:
 
 Optional: `GOOGLE_HD`, rate-limit overrides, `API_LOG_RETENTION_DAYS` (default 30), `ACTIVITY_LOG_RETENTION_DAYS` (default 90), `SESSION_ROTATE_AFTER_SEC` (default 86400; `0` disables).
 
-EmailJS (`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, plus `NEXT_PUBLIC_PORTAL_URL` / `APP_URL` for the CTA) is optional locally. When those are set, new group-channel members get “You have been added to this secure channel. Check it out”, and recipients of a new channel or DM message get “You have received a secure message. Check it out”. The mail never includes ciphertext or the message body. Starting a DM does not send the channel-added notice. If EmailJS is unset, in-app notices still land and the email is skipped.
+EmailJS (`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`) is optional locally. The Open Portal button always uses the production Vercel URL (`https://hackstreetboysltd-internal-app.vercel.app/Internal-App/`), never localhost or GitHub Pages. Override with `PRODUCTION_PORTAL_URL` if the canonical host changes. When EmailJS is set, new group-channel members get “You have been added to this secure channel. Check it out”, and recipients of a new channel or DM message get “You have received a secure message. Check it out”. The mail never includes ciphertext or the message body. Starting a DM does not send the channel-added notice. If EmailJS is unset, in-app notices still land and the email is skipped.
 
 ## Sessions
 
@@ -156,18 +156,20 @@ The host can unwrap `msgIdentityEnc` (it is wrapped with `SESSION_SECRET`, not E
 
 ## Messages: send spinner then “Failed to transmit message data to server”
 
-A Firefox console full of unused `_next/static/...css` preloads plus `cdnjs` Font Awesome CORS is **not** what failed the save. Those were side effects (dock prefetch of every module, webfonts from a third-party CDN). The save itself 504’d: EmailJS notification fetches had no timeout, so Vercel waited out the isolate and returned an empty body; Firefox `statusText` is blank on HTTP/2, so the UI logged `DataApiError:` with no message.
+A Firefox console full of unused `_next/static/...css` preloads plus `cdnjs` Font Awesome CORS is **not** what failed the save. Those were side effects (dock prefetch of every module, webfonts from a third-party CDN). The save itself hung past 15s: every send did a full `messages` collection rewrite under an advisory lock, and EmailJS work kept the request isolate busy (`after()` has also been observed to delay the HTTP response). Firefox then aborted the PUT (`NS_BINDING_ABORTED`) and the UI showed “The server timed out.”
 
 Guards (do not regress):
 
-1. Collection notification email runs in `after()` (`lib/server/afterResponse.js`) so the PUT can return as soon as Postgres commits.
-2. EmailJS `fetch` uses `AbortSignal.timeout` (8s) in `lib/server/notifications/emailFetch.js`.
-3. Collection PUT aborts at 15s and `httpErrorDetail` never throws a blank `DataApiError`.
-4. Font Awesome is bundled from `@fortawesome/fontawesome-free` (same origin). Do not add a cdnjs `<link>` for FA.
-5. Dock links use `prefetch={false}` and must not call `router.prefetch` for every module.
-6. After a successful messages PUT, the send spinner must not wait on `loadMessages()` — live watch refreshes the thread.
+1. Sending or editing a message uses `POST /api/data/messages/` with `{ merge: true, items }` (one INSERT), not a full-collection PUT. Deletes still PUT.
+2. Notification email is detached via `waitUntil` / `setImmediate` in `lib/server/afterResponse.js` — never Next.js `after()`, which has blocked route handlers.
+3. EmailJS `fetch` uses `AbortSignal.timeout` (8s) in `lib/server/notifications/emailFetch.js`.
+4. Collection writes abort at 15s and `httpErrorDetail` never throws a blank `DataApiError`.
+5. Font Awesome is bundled from `@fortawesome/fontawesome-free` (same origin). Do not add a cdnjs `<link>` for FA.
+6. Dock links use `prefetch={false}` and must not call `router.prefetch` for every module.
+7. After a successful messages write, the send spinner must not wait on `loadMessages()` — live watch refreshes the thread.
+8. Email “Open Portal” uses `getEmailPortalUrl()` (production Vercel), not localhost or GitHub Pages.
 
-`npm run test:prod-send-guards` locks 4–6 in source. `npm run test:http-error-detail` and `npm run test:email-fetch` lock 2–3.
+`npm run test:prod-send-guards` locks these in source. `npm run test:http-error-detail`, `npm run test:email-fetch`, and `npm run test:portal-url` lock error copy, EmailJS timeout, and the CTA host.
 
 ## Load check
 

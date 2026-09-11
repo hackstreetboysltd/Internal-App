@@ -34,6 +34,7 @@
     "test:account-identity": "node --import ./scripts/alias-loader.mjs scripts/test-account-identity.mjs",
     "test:http-error-detail": "node --import ./scripts/alias-loader.mjs scripts/test-http-error-detail.mjs",
     "test:email-fetch": "node --import ./scripts/alias-loader.mjs scripts/test-email-fetch.mjs",
+    "test:portal-url": "node --import ./scripts/alias-loader.mjs scripts/test-portal-url.mjs",
     "test:prod-send-guards": "node scripts/test-prod-send-guards.mjs",
     "test:secure-notices": "node --import ./scripts/alias-loader.mjs scripts/test-secure-notices.mjs",
     "wipe:messages": "node scripts/wipe-messages.mjs"

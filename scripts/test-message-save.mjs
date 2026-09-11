@@ -7,6 +7,7 @@ import {
   mergeMessageSavePayload,
   actorOwnsMessageRecord,
   finalizeMessageSavePayload,
+  messageUpsertsAndDeletes,
 } from "@/lib/messageSave.js";
 import { authorizeCollectionSave } from "@/lib/server/authorize.js";
 import { effectiveSyncSince } from "@/lib/server/collectionsDb.js";
@@ -380,3 +381,17 @@ assert.equal(past.toISOString(), "2026-09-10T18:33:21.806Z");
 const near = effectiveSyncSince("2026-09-10T18:53:43.000Z", harNow);
 assert.ok(near instanceof Date, "2s clock skew is still a usable cursor");
 console.log("ok: future sync cursor is ignored (HAR empty-delta)");
+
+const sendDiff = messageUpsertsAndDeletes(oldCollection, [...oldCollection, incoming[1]]);
+assert.deepEqual(sendDiff.deletes, []);
+assert.equal(sendDiff.upserts.length, 1);
+assert.equal(String(sendDiff.upserts[0].id), "new-1");
+
+const noopDiff = messageUpsertsAndDeletes(oldCollection, oldCollection);
+assert.equal(noopDiff.upserts.length, 0);
+assert.equal(noopDiff.deletes.length, 0);
+
+const deleteDiff = messageUpsertsAndDeletes(oldCollection, [foreign]);
+assert.deepEqual(deleteDiff.deletes, ["mine-1"]);
+assert.equal(deleteDiff.upserts.length, 0);
+console.log("ok: send diffs to a single upsert instead of a full replace");
