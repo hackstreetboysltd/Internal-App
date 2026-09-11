@@ -714,11 +714,14 @@ export default function MessagesClient() {
     const saveMessages = async (list) => {
         try {
             await save("messages", persistableCollection(list).filter(isCipherRecord), { admin: false });
-            await loadMessages();
+            // Live watch already refreshes messages; don't keep the send spinner
+            // locked on a full Neon re-hydrate after a successful PUT.
+            void loadMessages().catch((e) => console.warn("Post-save refresh failed:", e));
             return true;
         } catch (e) {
             console.error("Error saving messages:", e);
-            alert("Failed to transmit message data to server.");
+            const detail = e instanceof Error && e.message ? e.message : "";
+            alert(detail ? `Failed to save message: ${detail}` : "Failed to transmit message data to server.");
             return false;
         }
     };

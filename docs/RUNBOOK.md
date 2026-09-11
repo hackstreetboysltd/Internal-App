@@ -154,6 +154,21 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 
 The host can unwrap `msgIdentityEnc` (it is wrapped with `SESSION_SECRET`, not E2EE against the server). Teammates still cannot read another user’s private identity. After rotating `SESSION_SECRET`, update **every** host that shares the database to the same new value, then open Messages once on a browser that can already read so the blob can be rewritten.
 
+## Messages: send spinner then “Failed to transmit message data to server”
+
+A Firefox console full of unused `_next/static/...css` preloads plus `cdnjs` Font Awesome CORS is **not** what failed the save. Those were side effects (dock prefetch of every module, webfonts from a third-party CDN). The save itself 504’d: EmailJS notification fetches had no timeout, so Vercel waited out the isolate and returned an empty body; Firefox `statusText` is blank on HTTP/2, so the UI logged `DataApiError:` with no message.
+
+Guards (do not regress):
+
+1. Collection notification email runs in `after()` (`lib/server/afterResponse.js`) so the PUT can return as soon as Postgres commits.
+2. EmailJS `fetch` uses `AbortSignal.timeout` (8s) in `lib/server/notifications/emailFetch.js`.
+3. Collection PUT aborts at 15s and `httpErrorDetail` never throws a blank `DataApiError`.
+4. Font Awesome is bundled from `@fortawesome/fontawesome-free` (same origin). Do not add a cdnjs `<link>` for FA.
+5. Dock links use `prefetch={false}` and must not call `router.prefetch` for every module.
+6. After a successful messages PUT, the send spinner must not wait on `loadMessages()` — live watch refreshes the thread.
+
+`npm run test:prod-send-guards` locks 4–6 in source. `npm run test:http-error-detail` and `npm run test:email-fetch` lock 2–3.
+
 ## Load check
 
 ```bash

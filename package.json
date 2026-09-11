@@ -32,10 +32,14 @@
     "test:message-security": "node --import ./scripts/alias-loader.mjs scripts/test-message-security.mjs",
     "test:hybrid-crypto": "node --import ./scripts/alias-loader.mjs scripts/test-hybrid-crypto.mjs",
     "test:account-identity": "node --import ./scripts/alias-loader.mjs scripts/test-account-identity.mjs",
+    "test:http-error-detail": "node --import ./scripts/alias-loader.mjs scripts/test-http-error-detail.mjs",
+    "test:email-fetch": "node --import ./scripts/alias-loader.mjs scripts/test-email-fetch.mjs",
+    "test:prod-send-guards": "node scripts/test-prod-send-guards.mjs",
     "test:secure-notices": "node --import ./scripts/alias-loader.mjs scripts/test-secure-notices.mjs",
     "wipe:messages": "node scripts/wipe-messages.mjs"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "6.6.0",
     "@noble/post-quantum": "^0.5.4",
     "docx-preview": "^0.4.0",
     "firebase": "^10.12.2",

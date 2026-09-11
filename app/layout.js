@@ -1,9 +1,11 @@
 /* eslint-disable @next/next/no-page-custom-font */
 import "./globals.css";
 import "./module-scale.css";
+import "@fortawesome/fontawesome-free/css/all.min.css";
 import AppFrame from "@/components/AppFrame";
 
-/* CDN fonts; next/font would change loading behavior. */
+/* Google fonts stay on fonts.googleapis.com; Font Awesome is bundled same-origin
+   so Firefox does not CORS-block cdnjs webfonts. */
 
 export const metadata = {
   title: "HackstreetBoys Internal Portal",
@@ -22,10 +24,6 @@ export default function RootLayout({ children }) {
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
         />
       </head>
       <body>

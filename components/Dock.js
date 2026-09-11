@@ -1,26 +1,19 @@
 'use client';
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { moduleKeyFromPath, pathForModule, displayNameForModule, visibleModules } from "@/lib/modules";
 import { saveActiveModule } from "@/lib/session";
 import { useSession } from "@/lib/session";
 
 export default function Dock() {
-    const router = useRouter();
     const pathname = usePathname();
     const { isAdminView } = useSession();
     const routeActiveKey = moduleKeyFromPath(pathname);
     const [pendingKey, setPendingKey] = useState(null);
     const activeKey = pendingKey && pendingKey !== routeActiveKey ? pendingKey : routeActiveKey;
     const dockModules = useMemo(() => visibleModules(isAdminView), [isAdminView]);
-
-    useEffect(() => {
-        dockModules.forEach((mod) => {
-            router.prefetch(pathForModule(mod.key, isAdminView));
-        });
-    }, [dockModules, isAdminView, router]);
 
     const handleNav = (mod) => {
         const name = displayNameForModule(mod.key, isAdminView);
@@ -43,7 +36,7 @@ export default function Dock() {
                         <Link
                             key={mod.key}
                             href={pathForModule(mod.key, isAdminView)}
-                            prefetch
+                            prefetch={false}
                             id={isMessages ? "dockMessagesBtn" : undefined}
                             className={selected ? "dock-item selected" : "dock-item"}
                             title={title}

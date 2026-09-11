@@ -5,7 +5,7 @@ const nextConfig = {
     unoptimized: true,
   },
   trailingSlash: true,
-  transpilePackages: ["docx-preview", "pptx-preview", "pdfjs-dist"],
+  transpilePackages: ["docx-preview", "pptx-preview", "pdfjs-dist", "@fortawesome/fontawesome-free"],
   turbopack: {
     // pptx-preview uses named lodash imports incompatible with CJS lodash under Turbopack.
     resolveAlias: {

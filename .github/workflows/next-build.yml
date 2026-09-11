@@ -83,6 +83,9 @@ jobs:
           npm run test:hybrid-crypto
           npm run test:account-identity
           npm run test:message-security
+          npm run test:http-error-detail
+          npm run test:email-fetch
+          npm run test:prod-send-guards
 
       - name: Build (server mode)
         run: npm run build
