@@ -272,11 +272,14 @@ ensure_env_local() {
         echo -e "${YELLOW}Warning: GOOGLE_CLIENT_SECRET is not set — add it to .env.local from Google Cloud Console.${NC}"
     fi
 
-    if vercel_linked; then
+    if (vercel_linked); then
         if needs_local_postgres "$(env_get .env.local DATABASE_URL 2>/dev/null || true)" \
             || needs_local_redis "$(env_get .env.local REDIS_URL 2>/dev/null || true)"; then
             echo -e "${YELLOW}Vercel Production secrets are Sensitive — the CLI cannot read REDIS_URL / DATABASE_URL.${NC}"
             echo "Local dev uses Docker Postgres + Redis. To use Neon/Upstash locally, paste those URLs into .env.local from the Neon and Upstash dashboards."
+        fi
+        if ! needs_local_postgres "$(env_get .env.local DATABASE_URL 2>/dev/null || true)"; then
+            echo -e "${YELLOW}Shared Neon: keep Vercel SESSION_SECRET identical to .env.local or Messages cannot auto-unlock on production.${NC}"
         fi
     fi
 }

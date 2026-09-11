@@ -150,11 +150,7 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 
 `[Decryption Key Mismatch]` or a stuck “Waiting for your account key” banner means this browser cannot open the account identity those envelopes were sealed to. `localhost` and production are different origins, so `localStorage` is not shared even on the same laptop.
 
-**When local and production share the same Neon database, they must use the same `SESSION_SECRET`.** Account identity is AES-GCM wrapped with that secret. If Vercel’s `SESSION_SECRET` differs from `.env.local`, production cannot unwrap the blob written from `start.sh` and stays locked. Copy the value from `.env.local` into Vercel → Project → Settings → Environment Variables → `SESSION_SECRET` (Production), redeploy, then reload Messages. Do not mint a second random secret for prod when the database is shared.
-
-1. Align `SESSION_SECRET` (above), then open Messages once on the origin that can already read the thread (usually local). That upload writes the account key if needed.
-2. Reload (or wait a few seconds) on the failing origin — it installs the account key after sign-in.
-3. Break-glass: key menu → Export / Import. Do not paste the key into chat, tickets, or logs.
+**When local and production share the same Neon database, they must use the same `SESSION_SECRET`.** Account identity is AES-GCM wrapped with that secret. If Vercel’s `SESSION_SECRET` differs from `.env.local`, production cannot unwrap the blob and Messages stays on “unlocking this device…”. Keep one shared value: copy from `.env.local` into Vercel → Environment Variables → `SESSION_SECRET` (Production + Preview), redeploy, then open Messages once on the browser that can already decrypt (usually local) so the account key is rewritten. Other signed-in origins then install it automatically — no export/import.
 
 The host can unwrap `msgIdentityEnc` (it is wrapped with `SESSION_SECRET`, not E2EE against the server). Teammates still cannot read another user’s private identity. After rotating `SESSION_SECRET`, update **every** host that shares the database to the same new value, then open Messages once on a browser that can already read so the blob can be rewritten.
 

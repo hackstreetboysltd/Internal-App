@@ -479,8 +479,12 @@ export default function MessagesClient() {
             const inbox = Array.isArray(mail) ? mail : messagesRef.current;
             const existingMail = inbox.some((m) => isEnvelopeMessage(m));
             let localUnlocksMail = false;
-            if (existingMail && hasLocalIdentity(key)) {
-                localUnlocksMail = await localUnlocksAny(inbox, key);
+            if (hasLocalIdentity(key)) {
+                // Prefer proving unlock against mail; if the inbox is empty/unreliable,
+                // still treat a persisted local key as uploadable so sync can heal.
+                localUnlocksMail = existingMail
+                    ? await localUnlocksAny(inbox, key)
+                    : true;
             }
             const plan = accountIdentityPlan({
                 hasAccountIdentity: false,
@@ -499,7 +503,11 @@ export default function MessagesClient() {
             const identity = await loadIdentity(key);
             const persisted = readPersistedIdentity(key);
             if (persisted) {
-                const uploaded = await uploadAccountMessageIdentity(persisted);
+                // Always push when this browser can unlock — rewrites an orphan
+                // blob left by a mismatched SESSION_SECRET so other origins install.
+                const uploaded = await uploadAccountMessageIdentity(persisted, {
+                    replace: existingMail && localUnlocksMail,
+                });
                 if (uploaded.conflict && uploaded.identity) {
                     const installed = await installPersistedIdentity(key, uploaded.identity);
                     return activateIdentity(key, installed, true);
@@ -739,7 +747,7 @@ export default function MessagesClient() {
         () => threadMsgs.some((m) => decoded[m.id]?.decResult === DECRYPT_MISMATCH),
         [threadMsgs, decoded],
     );
-    const showKeyHelp = awaitingAccountKey || deviceKeyDrift || threadHasMismatch;
+    const showKeyHelp = !awaitingAccountKey && (deviceKeyDrift || threadHasMismatch);
 
     useEffect(() => {
         if (!openRoom) return;
@@ -1329,13 +1337,7 @@ export default function MessagesClient() {
                                             )}
                                             {showKeyHelp ? (
                                                 <p className="msg-key-drift">
-                                                    {awaitingAccountKey
-                                                        ? "Waiting for your account key. Open Messages once on the browser that can already read them — this tab will pick it up."
-                                                        : "This browser cannot unlock these messages yet. Open Messages once where they already read, or import a key backup."}
-                                                    {" "}
-                                                    <button type="button" className="msg-key-link" onClick={openImportDeviceKey}>
-                                                        Import key
-                                                    </button>
+                                                    This browser cannot unlock these messages yet. Use the key menu to import a backup if sync did not finish.
                                                 </p>
                                             ) : null}
                                         </div>
