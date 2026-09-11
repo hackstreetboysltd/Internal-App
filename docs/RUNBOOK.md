@@ -53,7 +53,7 @@ Free tier: ~10k commands/day — fine for a small internal team. Admin SSE recon
 |------|---------|
 | `APP_URL` | `https://your-app.vercel.app/Internal-App` |
 | `NEXT_PUBLIC_BASE_PATH` | `/Internal-App` |
-| `SESSION_SECRET` | long random string (`openssl rand -hex 32`) |
+| `SESSION_SECRET` | long random string (`openssl rand -hex 32`); **must match `.env.local` when local and Vercel share Neon** |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth client |
 | `GOOGLE_REDIRECT_URI` | `https://your-app.vercel.app/Internal-App/api/auth/callback` |
 | `DATABASE_URL` | Neon **pooled** URI (`?sslmode=require`) |
@@ -146,34 +146,17 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 - Account message identity is owner-only (`/api/messages/identity`); `profile.msgIdentityEnc` is stripped from collection reads and cannot be rotated via a profile save
 - Successful message edits persist `editedAt` and render an Edited badge; unchanged rows in a collection re-save are not marked edited
 
-## Messages: decryption key mismatch
+## Messages: decryption key mismatch / production stuck on `[Locked]`
 
-`[Decryption Key Mismatch]` or a stuck “Waiting for your account key” banner means this browser does not have the account identity those envelopes were sealed to. `localhost` and production are different origins, so `localStorage` is not shared even on the same laptop.
+`[Decryption Key Mismatch]` or a stuck “Waiting for your account key” banner means this browser cannot open the account identity those envelopes were sealed to. `localhost` and production are different origins, so `localStorage` is not shared even on the same laptop.
 
-```mermaid
-sequenceDiagram
-  participant Local as Local Messages
-  participant API as Identity API
-  participant DB as Shared Postgres
-  participant Prod as Production Messages
-  Local->>API: GET /api/messages/identity
-  API->>DB: unwrap with DB wrap key
-  alt blob still SESSION_SECRET-wrapped
-    API->>DB: unwrap with local SESSION_SECRET then rewrap
-  end
-  API-->>Local: account identity
-  Local->>API: PUT if this browser already unlocks mail
-  Prod->>API: GET /api/messages/identity
-  API->>DB: unwrap with DB wrap key
-  API-->>Prod: same account identity
-```
+**When local and production share the same Neon database, they must use the same `SESSION_SECRET`.** Account identity is AES-GCM wrapped with that secret. If Vercel’s `SESSION_SECRET` differs from `.env.local`, production cannot unwrap the blob written from `start.sh` and stays locked. Copy the value from `.env.local` into Vercel → Project → Settings → Environment Variables → `SESSION_SECRET` (Production), redeploy, then reload Messages. Do not mint a second random secret for prod when the database is shared.
 
-1. Deploy this build to Vercel (production must use the database wrap key).
-2. Open Messages once on the origin that can already read the thread (usually local). That read rewraps any `SESSION_SECRET` blob and uploads if needed.
-3. Reload (or wait a few seconds) on the failing origin — it installs the account key after sign-in.
-4. Break-glass: key menu → Export / Import. Do not paste the key into chat, tickets, or logs.
+1. Align `SESSION_SECRET` (above), then open Messages once on the origin that can already read the thread (usually local). That upload writes the account key if needed.
+2. Reload (or wait a few seconds) on the failing origin — it installs the account key after sign-in.
+3. Break-glass: key menu → Export / Import. Do not paste the key into chat, tickets, or logs.
 
-The host can unwrap `msgIdentityEnc` (it is wrapped with a key stored in `message_identity_wrap_keys`, not E2EE against the server). Teammates still cannot read another user’s private identity. `SESSION_SECRET` rotation no longer locks production out of a key written from `start.sh`.
+The host can unwrap `msgIdentityEnc` (it is wrapped with `SESSION_SECRET`, not E2EE against the server). Teammates still cannot read another user’s private identity. After rotating `SESSION_SECRET`, update **every** host that shares the database to the same new value, then open Messages once on a browser that can already read so the blob can be rewritten.
 
 ## Load check
 
