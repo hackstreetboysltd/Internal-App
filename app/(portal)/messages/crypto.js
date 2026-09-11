@@ -11,6 +11,8 @@ export const ECDH_ALG = { name: "ECDH", namedCurve: "P-256" };
 export const HYBRID_WRAP_INFO = "CX-MSG-HYBRID-v1";
 export const IDENTITY_PREFIX = "messages.identity.";
 export const IDENTITY_FORMAT = 2;
+export const IDENTITY_BACKUP_KIND = "cx-msg-identity";
+export const IDENTITY_BACKUP_VERSION = 1;
 export const DECRYPT_MISMATCH = "[Decryption Key Mismatch]";
 export const DECRYPT_INVALID = "[Invalid Cipher Block]";
 export const NOT_ADDRESSED = "[Not addressed to you]";
@@ -160,6 +162,98 @@ function identityStorageKey(email) {
     return IDENTITY_PREFIX + (email || "").trim().toLowerCase();
 }
 
+function isPersistedIdentity(parsed) {
+    return !!(
+        parsed
+        && typeof parsed === "object"
+        && Number(parsed.format) === IDENTITY_FORMAT
+        && parsed.publicJwk
+        && parsed.privateJwk
+        && typeof parsed.mlkemPublic === "string"
+        && parsed.mlkemPublic
+        && typeof parsed.mlkemSecret === "string"
+        && parsed.mlkemSecret
+    );
+}
+
+/** Drop the in-memory identity so the next load reads localStorage. */
+export function clearIdentityCache() {
+    identityKeys = null;
+    identityEmail = "";
+}
+
+/**
+ * Publish a newly generated device key only when the profile has no hybrid
+ * msgPub yet, or it already matches this device. Never rotate a published key
+ * just because this origin created a fresh localStorage identity.
+ * @param {unknown} existing
+ * @param {unknown} next
+ */
+export function shouldPublishDeviceMsgPub(existing, next) {
+    const incoming = normalizeMsgPub(next);
+    if (!incoming) return false;
+    const published = normalizeMsgPub(existing);
+    if (!published) return true;
+    return (
+        published.ecdh?.x === incoming.ecdh?.x
+        && published.ecdh?.y === incoming.ecdh?.y
+        && published.mlkem === incoming.mlkem
+    );
+}
+
+/**
+ * @param {string} email
+ */
+export function exportIdentityBackup(email) {
+    const key = (email || "").trim().toLowerCase();
+    if (!key) throw new Error("Sign in before exporting a device key");
+    let raw = null;
+    try {
+        raw = localStorage.getItem(identityStorageKey(key));
+    } catch {
+        raw = null;
+    }
+    if (!raw) throw new Error("No device key on this browser");
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        throw new Error("Device key on this browser is unreadable");
+    }
+    if (!isPersistedIdentity(parsed)) throw new Error("Device key on this browser cannot be exported");
+    return {
+        kind: IDENTITY_BACKUP_KIND,
+        v: IDENTITY_BACKUP_VERSION,
+        email: key,
+        identity: parsed,
+    };
+}
+
+/**
+ * @param {string} email
+ * @param {unknown} payload
+ */
+export async function importIdentityBackup(email, payload) {
+    const key = (email || "").trim().toLowerCase();
+    if (!key) throw new Error("Sign in before importing a device key");
+    if (!payload || typeof payload !== "object") throw new Error("Not a device key file");
+    const row = /** @type {Record<string, unknown>} */ (payload);
+    if (row.kind !== IDENTITY_BACKUP_KIND) throw new Error("Not a device key file");
+    if (Number(row.v) !== IDENTITY_BACKUP_VERSION) throw new Error("Unsupported device key file");
+    const fileEmail = String(row.email || "").trim().toLowerCase();
+    if (fileEmail !== key) throw new Error("This key belongs to a different account");
+    if (!isPersistedIdentity(row.identity)) throw new Error("Device key file is incomplete");
+    clearIdentityCache();
+    try {
+        localStorage.setItem(identityStorageKey(key), JSON.stringify(row.identity));
+    } catch {
+        throw new Error("Could not store the device key in this browser");
+    }
+    const identity = await loadIdentity(key);
+    if (!identity) throw new Error("Imported device key could not be loaded");
+    return identity;
+}
+
 export function hasLocalIdentity(email) {
     if (identityKeys && identityEmail === (email || "").trim().toLowerCase()) return true;
     try {
@@ -213,13 +307,7 @@ export async function loadIdentity(email) {
         const raw = localStorage.getItem(identityStorageKey(key));
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (
-                Number(parsed.format) === IDENTITY_FORMAT &&
-                parsed.publicJwk &&
-                parsed.privateJwk &&
-                typeof parsed.mlkemPublic === "string" &&
-                typeof parsed.mlkemSecret === "string"
-            ) {
+            if (isPersistedIdentity(parsed)) {
                 identityKeys = {
                     publicJwk: parsed.publicJwk,
                     privateKey: await importEcdhPrivate(parsed.privateJwk),

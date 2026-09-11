@@ -19,7 +19,9 @@ import {
     channelMeta,
     decryptMessage,
     encryptSealedEnvelope,
+    exportIdentityBackup,
     identityMsgPub,
+    importIdentityBackup,
     isEnvelopeMessage,
     isCipherRecord,
     loadIdentity,
@@ -27,6 +29,7 @@ import {
     normalizeChannel,
     normalizeMsgPub,
     resolveRecipientMsgPub,
+    shouldPublishDeviceMsgPub,
 } from "./crypto";
 import { dmChannelId, filterChannelsForActor, findDmChannel, isDmChannel, messageChannelTabs, otherDmMember } from "@/lib/channels";
 import { formatPortalCreatedStamp, formatPortalDateTime } from "@/lib/portalTime";
@@ -268,7 +271,7 @@ function hybridMsgPubMatches(existing, next) {
     return a.ecdh?.x === b.ecdh?.x && a.ecdh?.y === b.ecdh?.y && a.mlkem === b.mlkem;
 }
 
-async function publishMessagePublicKey(msgPub, email, setUsers) {
+async function publishMessagePublicKey(msgPub, email, setUsers, opts = {}) {
     const key = (email || "").trim().toLowerCase();
     const pub = normalizeMsgPub(msgPub) ? msgPub : null;
     if (!key || !pub) return;
@@ -278,6 +281,7 @@ async function publishMessagePublicKey(msgPub, email, setUsers) {
         const idx = list.findIndex((p) => (p.email || "").trim().toLowerCase() === key);
         if (idx === -1) return;
         if (hybridMsgPubMatches(list[idx].msgPub, pub)) return;
+        if (!opts.replace && !shouldPublishDeviceMsgPub(list[idx].msgPub, pub)) return;
         const next = list.slice();
         next[idx] = { ...next[idx], msgPub: pub };
         await save("profile", next, { admin: false });
@@ -287,6 +291,19 @@ async function publishMessagePublicKey(msgPub, email, setUsers) {
     } catch (e) {
         console.warn("Could not publish message public key:", e);
     }
+}
+
+function DeviceKeyMenu({ onExport, onImport }) {
+    return (
+        <ItemMenu
+            title="Device key"
+            icon="fa-solid fa-key"
+            items={[
+                { label: "Export device key", onClick: onExport },
+                { label: "Import device key", onClick: onImport },
+            ]}
+        />
+    );
 }
 
 function profileMsgPub(users, email, actorEmail, identityPub) {
@@ -326,6 +343,7 @@ export default function MessagesClient() {
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
     const composeEditorRef = useRef(null);
+    const importFileRef = useRef(null);
     const threadEndRef = useRef(null);
     const timers = useRef([]);
     const later = (fn, ms) => {
@@ -432,6 +450,55 @@ export default function MessagesClient() {
             return null;
         }
     }, []);
+
+    const exportDeviceKey = () => {
+        if (!confirm("Download this browser’s private message key? Anyone with the file can read your mail. Keep it offline.")) {
+            return;
+        }
+        try {
+            const backup = exportIdentityBackup(actorEmail);
+            const blob = new Blob([JSON.stringify(backup)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "messages-device-key.json";
+            a.rel = "noopener";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Could not export the device key.");
+        }
+    };
+
+    const importDeviceKeyFile = async (file) => {
+        if (!file) return;
+        try {
+            const text = await file.text();
+            let payload;
+            try {
+                payload = JSON.parse(text);
+            } catch {
+                throw new Error("That file is not a device key.");
+            }
+            if (!confirm("Replace this browser’s message key? Mail sealed only to the current key will stop opening here.")) {
+                return;
+            }
+            const identity = await importIdentityBackup(actorEmail, payload);
+            const msgPub = identity ? identityMsgPub(identity) : null;
+            setIdentityReady(!!identity);
+            setIdentityPub(msgPub);
+            decryptCacheRef.current = new Map();
+            setDecoded({});
+            if (msgPub) await publishMessagePublicKey(msgPub, actorEmail, setUsers, { replace: true });
+            await loadMessages();
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Could not import the device key.");
+        }
+    };
+
+    const openImportDeviceKey = () => importFileRef.current?.click();
 
     useEffect(() => {
         invalidateCollectionCache("channels");
@@ -577,6 +644,12 @@ export default function MessagesClient() {
         channelMsgs.sort((a, b) => getMessageCreatedTime(a) - getMessageCreatedTime(b));
         return channelMsgs;
     }, [messages, openRoom]);
+
+    const threadHasMismatch = useMemo(
+        () => threadMsgs.some((m) => decoded[m.id]?.decResult === DECRYPT_MISMATCH),
+        [threadMsgs, decoded],
+    );
+    const showKeyHelp = deviceKeyDrift || threadHasMismatch;
 
     useEffect(() => {
         if (!openRoom) return;
@@ -1160,10 +1233,17 @@ export default function MessagesClient() {
                                                         : "unlocking this device…"}
                                                 </p>
                                             )}
-                                            {deviceKeyDrift ? (
-                                                <p className="msg-key-drift">This browser’s key differs from the published one. New mail is sealed to this device; older mail may not open until you use the original browser.</p>
+                                            {showKeyHelp ? (
+                                                <p className="msg-key-drift">
+                                                    This browser cannot unlock these messages. Export the device key from the browser that can read them, then import it here.
+                                                    {" "}
+                                                    <button type="button" className="msg-key-link" onClick={openImportDeviceKey}>
+                                                        Import key
+                                                    </button>
+                                                </p>
                                             ) : null}
                                         </div>
+                                        <DeviceKeyMenu onExport={exportDeviceKey} onImport={openImportDeviceKey} />
                                         <CloseModuleBtn onClick={closeModule} />
                                     </div>
                                     <div className="msg-thread" role="log" aria-live="polite" aria-relevant="additions">
@@ -1230,7 +1310,10 @@ export default function MessagesClient() {
                                 </div>
                             ) : (
                                 <div className="msg-stage-idle">
-                                    <CloseModuleBtn onClick={closeModule} />
+                                    <div className="msg-stage-idle-actions">
+                                        <DeviceKeyMenu onExport={exportDeviceKey} onImport={openImportDeviceKey} />
+                                        <CloseModuleBtn onClick={closeModule} />
+                                    </div>
                                     <div className="msg-stage-empty">
                                         <div className="msg-seal" aria-hidden><span>SEAL</span></div>
                                         <h3>pick a room</h3>
@@ -1242,6 +1325,20 @@ export default function MessagesClient() {
                     </div>
                 )}
             </div>
+
+            <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                aria-hidden
+                tabIndex={-1}
+                onChange={(e) => {
+                    const file = e.target.files && e.target.files[0];
+                    e.target.value = "";
+                    if (file) importDeviceKeyFile(file);
+                }}
+            />
 
             <ModuleModal open={newDmOpen} shown={newDmShown} onBackdrop={() => closeModal(setNewDmOpen, setNewDmShown)}>
                 <div className="modal-content msg-new-dm-modal">

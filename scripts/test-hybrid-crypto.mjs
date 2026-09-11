@@ -23,6 +23,11 @@ const {
   decryptMessage,
   isEnvelopeMessage,
   resolveRecipientMsgPub,
+  exportIdentityBackup,
+  importIdentityBackup,
+  clearIdentityCache,
+  shouldPublishDeviceMsgPub,
+  IDENTITY_PREFIX,
   NOT_ADDRESSED,
   DECRYPT_INVALID,
   DECRYPT_MISMATCH,
@@ -85,5 +90,32 @@ const liveSelf = await encryptSealedEnvelope(
   "alice@example.com",
 );
 assert.equal(await decryptMessage(liveSelf, null, "alice@example.com"), plain);
+
+assert.equal(shouldPublishDeviceMsgPub(null, alicePub), true);
+assert.equal(shouldPublishDeviceMsgPub(alicePub, alicePub), true);
+assert.equal(shouldPublishDeviceMsgPub(alicePub, bobPub), false);
+
+const backup = exportIdentityBackup("alice@example.com");
+assert.equal(backup.email, "alice@example.com");
+const aliceKey = IDENTITY_PREFIX + "alice@example.com";
+clearIdentityCache();
+store.delete(aliceKey);
+const drifted = await loadIdentity("alice@example.com");
+assert.ok(normalizeMsgPub(identityMsgPub(drifted)));
+assert.notEqual(identityMsgPub(drifted).mlkem, alicePub.mlkem);
+assert.equal(await decryptMessage(envelope, null, "alice@example.com"), DECRYPT_MISMATCH);
+assert.equal(shouldPublishDeviceMsgPub(alicePub, identityMsgPub(drifted)), false);
+
+const restored = await importIdentityBackup("alice@example.com", backup);
+assert.equal(identityMsgPub(restored).mlkem, alicePub.mlkem);
+assert.equal(await decryptMessage(envelope, null, "alice@example.com"), plain);
+
+let importRejected = false;
+try {
+  await importIdentityBackup("bob@example.com", backup);
+} catch {
+  importRejected = true;
+}
+assert.equal(importRejected, true);
 
 console.log("ok: hybrid crypto round-trip");

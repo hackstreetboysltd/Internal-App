@@ -143,7 +143,18 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 - Admin APIs require `roles` to include `admin`
 - Rate limits on `/api/*` via Redis sliding windows
 - Message ciphertext uses client-side hybrid sealed envelopes (`messages/crypto.js`, ENC v5)
+- Device private keys are origin-scoped (`localStorage`); a new origin must import the original device-key file instead of rotating `profile.msgPub`
 - Successful message edits persist `editedAt` and render an Edited badge; unchanged rows in a collection re-save are not marked edited
+
+## Messages: decryption key mismatch
+
+`[Decryption Key Mismatch]` on one origin (typically production) while another origin (typically localhost) still reads the same thread means the device private key in `localStorage` (`messages.identity.<email>`) is not the key those envelopes were sealed to. Origins do not share `localStorage`.
+
+1. On the origin that can read the mail, export the device key (key menu in Messages) or copy that `localStorage` value in DevTools.
+2. On the failing origin, import the same file (or set the same `localStorage` key) and reload.
+3. Do not paste the key into chat, tickets, or logs.
+
+Opening Messages on a new origin must not overwrite `profile.msgPub`. Only an explicit import republishes.
 
 ## Load check
 

@@ -503,11 +503,14 @@
     min-height: 0;
     position: relative;
 }
-.messages-module .msg-stage-idle > .close-module-btn {
+.messages-module .msg-stage-idle-actions {
     position: absolute;
     top: 10px;
     right: 12px;
     z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 .messages-module .msg-stage-empty,
 .messages-module .msg-stage-skel {
@@ -814,6 +817,34 @@
     font-size: 0.68rem;
     line-height: 1.35;
     color: #ffb4c8;
+}
+.messages-module .msg-key-link {
+    display: inline;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: none;
+    color: #ffd0dc;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.messages-module .msg-chat-header .item-menu button.item-menu-btn,
+.messages-module .msg-stage-idle-actions .item-menu button.item-menu-btn {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    box-shadow: none;
+    opacity: 0.65;
+}
+.messages-module .msg-chat-header .item-menu button.item-menu-btn:hover,
+.messages-module .msg-stage-idle-actions .item-menu button.item-menu-btn:hover {
+    color: #fff;
+    opacity: 1;
 }
 .messages-module .msg-bubble-actions {
     position: static;
