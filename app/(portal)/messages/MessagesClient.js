@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { get, save, watch } from "@/lib/portalApi";
 import { invalidateCollectionCache } from "@/lib/dataApi";
 import { useSession, clearActiveModule } from "@/lib/session";
@@ -48,6 +48,7 @@ import {
     persistableCollection,
     sameId,
 } from "./messagesHelpers";
+import { isMessagesNarrowViewport, markStayOnDashboard } from "@/lib/viewport";
 
 const ACCENT = "#9b87ff";
 
@@ -354,6 +355,8 @@ function latestInChannel(messages, channelId) {
 
 export default function MessagesClient() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const roomFromUrl = String(searchParams.get("room") || "").trim().toLowerCase();
     const { actor } = useSession();
     const actorRef = useRef(actor);
     useEffect(() => { actorRef.current = actor; }, [actor]);
@@ -642,8 +645,25 @@ export default function MessagesClient() {
         if (loading || didPickRoom.current || !channelCatalog.length) return;
         didPickRoom.current = true;
         if (openRoom) return;
+
+        const fromLink = roomFromUrl
+            && (
+                roomFromUrl === DIRECT_CHANNEL
+                || roomFromUrl.startsWith("dm-")
+                || channelCatalog.some((c) => String(c.id) === roomFromUrl)
+            )
+            ? roomFromUrl
+            : "";
+
+        // Mobile keeps the rooms list (home). Deep-link room is highlighted in the rail.
+        if (isMessagesNarrowViewport()) return;
+
+        if (fromLink) {
+            setOpenRoom(fromLink);
+            return;
+        }
         setOpenRoom(channelCatalog[0].id);
-    }, [loading, channelCatalog, openRoom]);
+    }, [loading, channelCatalog, openRoom, roomFromUrl]);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -794,12 +814,21 @@ export default function MessagesClient() {
         });
     }, [memberChannels, messages, decoded, q, actorEmail, profileByEmail]);
 
+    useEffect(() => {
+        if (loading || openRoom || !roomFromUrl || !isMessagesNarrowViewport()) return;
+        const row = document.querySelector(".msg-room-row.is-notice-target");
+        if (row && typeof row.scrollIntoView === "function") {
+            row.scrollIntoView({ block: "nearest" });
+        }
+    }, [loading, openRoom, roomFromUrl, lobbyRooms]);
+
     const openModal = (setOpen, setShown) => {
         setOpen(true);
         later(() => setShown(true), 10);
     };
     const closeModule = () => {
         clearActiveModule();
+        markStayOnDashboard();
         router.push("/");
     };
 
@@ -1240,9 +1269,6 @@ export default function MessagesClient() {
                                 >
                                     New
                                 </button>
-                                <span className="msg-rail-close">
-                                    <CloseModuleBtn onClick={closeModule} />
-                                </span>
                             </div>
                             <div className="msg-rail-list" role="list">
                                 {lobbyRooms.length === 0 ? (
@@ -1250,6 +1276,7 @@ export default function MessagesClient() {
                                 ) : lobbyRooms.map((room) => {
                                     const members = (room.memberEmails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean);
                                     const active = openRoom === room.id;
+                                    const fromNotice = !openRoom && roomFromUrl === room.id;
                                     const channelAvatar = !room.isDirect
                                         ? (members
                                             .map((email) => profileByEmail.get(email)?.avatar)
@@ -1259,10 +1286,10 @@ export default function MessagesClient() {
                                         <div
                                             role="listitem"
                                             key={room.id}
-                                            className={`msg-room-row${active ? " is-active" : ""}${room.isDirect ? " is-direct" : ""}`}
+                                            className={`msg-room-row${active ? " is-active" : ""}${fromNotice ? " is-notice-target" : ""}${room.isDirect ? " is-direct" : ""}`}
                                             style={{ "--room-hue": roomHue(room.id) }}
                                             tabIndex={0}
-                                            aria-current={active ? "true" : undefined}
+                                            aria-current={active || fromNotice ? "true" : undefined}
                                             onClick={() => openChat(room.id)}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter" || e.key === " ") {

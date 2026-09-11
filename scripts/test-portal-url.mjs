@@ -3,8 +3,10 @@
  * Usage: node --import ./scripts/alias-loader.mjs scripts/test-portal-url.mjs
  */
 import assert from "node:assert/strict";
+import { messagesRoomLinkPath } from "../lib/server/notifications/links.js";
 import {
   CANONICAL_PRODUCTION_PORTAL_URL,
+  emailPortalUrlForPath,
   getEmailJsOrigin,
   getEmailPortalUrl,
   isUnusableEmailPortalUrl,
@@ -67,6 +69,21 @@ assert.equal(
     APP_URL: "http://localhost:3000/Internal-App",
   }),
   "https://hackstreetboysltd-internal-app.vercel.app",
+);
+
+assert.equal(messagesRoomLinkPath("eng"), "/messages/?room=eng");
+assert.equal(
+  messagesRoomLinkPath("dm-alice_40example.com--bob_40example.com"),
+  "/messages/?room=dm-alice_40example.com--bob_40example.com",
+);
+assert.equal(messagesRoomLinkPath("../x"), "/messages/");
+assert.equal(messagesRoomLinkPath(""), "/messages/");
+
+assert.equal(
+  emailPortalUrlForPath("/messages/?room=eng", {
+    PRODUCTION_PORTAL_URL: "https://hackstreetboysltd-internal-app.vercel.app/Internal-App",
+  }),
+  "https://hackstreetboysltd-internal-app.vercel.app/Internal-App/messages/?room=eng",
 );
 
 console.log("test-portal-url: ok");

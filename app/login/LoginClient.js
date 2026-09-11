@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/apiPath";
+import { MOBILE_HOME_PATH, isMobileViewport } from "@/lib/viewport";
 import "./login.css";
 
 const GOOGLE_BTN_LABEL = (
@@ -33,6 +34,13 @@ function getOrCreateTabSessionId() {
     }
 }
 
+function defaultReturnTo() {
+    if (typeof window !== "undefined" && isMobileViewport()) {
+        return MOBILE_HOME_PATH;
+    }
+    return "/";
+}
+
 export default function LoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -53,8 +61,8 @@ export default function LoginPage() {
                     cache: "no-store",
                 });
                 if (cancelled || !res.ok) return;
-                const returnTo = searchParams.get("returnTo") || "/";
-                router.replace(returnTo.startsWith("/") ? returnTo : "/");
+                const returnTo = searchParams.get("returnTo") || defaultReturnTo();
+                router.replace(returnTo.startsWith("/") ? returnTo : defaultReturnTo());
             } catch {
                 /* stay on login */
             }
@@ -80,7 +88,7 @@ export default function LoginPage() {
 
     const onGoogleClick = () => {
         setBusyLabel("Redirecting…");
-        const returnTo = searchParams.get("returnTo") || "/";
+        const returnTo = searchParams.get("returnTo") || defaultReturnTo();
         const sessionId = getOrCreateTabSessionId();
         const params = new URLSearchParams({
             returnTo,

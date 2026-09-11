@@ -51,7 +51,8 @@ export function middleware(request) {
 
   if (!sid) {
     const loginUrl = new URL(withBasePath("/login/"), request.url);
-    loginUrl.searchParams.set("returnTo", pathname);
+    const returnTo = `${pathname}${request.nextUrl.search || ""}`;
+    loginUrl.searchParams.set("returnTo", returnTo);
     return NextResponse.redirect(loginUrl);
   }
 

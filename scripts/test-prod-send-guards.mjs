@@ -41,6 +41,7 @@ assert.match(withApi, /scheduleAfterResponse\(\(\) => logApiRequest/, "API logs 
 const email = readFileSync(new URL("../lib/server/notifications/email.js", import.meta.url), "utf8");
 assert.match(email, /emailJsRequestInit/, "EmailJS fetch must use the timed-out helper");
 assert.match(email, /getEmailPortalUrl/, "Open Portal must use the canonical production portal helper");
+assert.match(email, /emailPortalUrlForPath/, "secure notices must deep-link Open Portal via path join");
 assert.equal(
   /process\.env\.NEXT_PUBLIC_PORTAL_URL \|\| process\.env\.APP_URL/.test(email),
   false,

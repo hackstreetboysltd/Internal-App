@@ -384,6 +384,13 @@
 .messages-module .msg-room-row.is-active::before {
     opacity: 1;
 }
+.messages-module .msg-room-row.is-notice-target {
+    background: rgba(216, 242, 90, 0.1);
+    border-color: rgba(216, 242, 90, 0.28);
+}
+.messages-module .msg-room-row.is-notice-target::before {
+    opacity: 1;
+}
 .messages-module .msg-room-row:focus-visible {
     outline: 2px solid var(--msg-chartreuse);
     outline-offset: 2px;
@@ -986,7 +993,6 @@
     }
     .messages-module.is-thread-open .msg-rail { display: none; }
     .messages-module:not(.is-thread-open) .msg-stage { display: none; }
-    .messages-module .msg-rail-close { display: inline-flex; }
     .messages-module .msg-bubble-stack { max-width: 88%; }
 }
 

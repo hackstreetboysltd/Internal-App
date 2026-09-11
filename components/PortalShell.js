@@ -14,6 +14,7 @@ import { setGithubPat } from "@/lib/portalApi";
 import { moduleKeyFromPath, pathForModule, displayNameForModule } from "@/lib/modules";
 import { trackActivity } from "@/lib/activityTracker";
 import { isTrustedGithubMessage } from "@/lib/githubMessage";
+import { markStayOnDashboard } from "@/lib/viewport";
 
 import { usePortalData } from "@/components/PortalDataProvider";
 
@@ -64,6 +65,7 @@ function PortalChrome({ children }) {
     const goDashboard = () => {
         trackActivity("nav.home", "/");
         clearActiveModule();
+        markStayOnDashboard();
         router.push("/");
     };
 

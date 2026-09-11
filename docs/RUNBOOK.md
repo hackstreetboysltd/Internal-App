@@ -96,7 +96,7 @@ Required in production:
 
 Optional: `GOOGLE_HD`, rate-limit overrides, `API_LOG_RETENTION_DAYS` (default 30), `ACTIVITY_LOG_RETENTION_DAYS` (default 90), `SESSION_ROTATE_AFTER_SEC` (default 86400; `0` disables).
 
-EmailJS (`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`) is optional locally. The Open Portal button always uses the production Vercel URL (`https://hackstreetboysltd-internal-app.vercel.app/Internal-App/`), never localhost or GitHub Pages. Override with `PRODUCTION_PORTAL_URL` if the canonical host changes. When EmailJS is set, new group-channel members get “You have been added to this secure channel. Check it out”, and recipients of a new channel or DM message get “You have received a secure message. Check it out”. The mail never includes ciphertext or the message body. Starting a DM does not send the channel-added notice. If EmailJS is unset, in-app notices still land and the email is skipped.
+EmailJS (`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`) is optional locally. The Open Portal button always uses the production Vercel host (`https://hackstreetboysltd-internal-app.vercel.app/Internal-App/…`), never localhost or GitHub Pages. Override with `PRODUCTION_PORTAL_URL` if the canonical host changes. Secure message/channel notices deep-link Open Portal to `/messages/?room=<channelId>` (that chat on desktop; rooms list on mobile, with the target room highlighted). When EmailJS is set, new group-channel members get “You have been added to this secure channel. Check it out”, and recipients of a new channel or DM message get “You have received a secure message. Check it out”. The mail never includes ciphertext or the message body. Starting a DM does not send the channel-added notice. If EmailJS is unset, in-app notices still land and the email is skipped.
 
 ## Sessions
 
@@ -167,7 +167,7 @@ Guards (do not regress):
 5. Font Awesome is bundled from `@fortawesome/fontawesome-free` (same origin). Do not add a cdnjs `<link>` for FA.
 6. Dock links use `prefetch={false}` and must not call `router.prefetch` for every module.
 7. After a successful messages write, the send spinner must not wait on `loadMessages()` — live watch refreshes the thread.
-8. Email “Open Portal” uses `getEmailPortalUrl()` (production Vercel), not localhost or GitHub Pages.
+8. Email “Open Portal” uses `getEmailPortalUrl()` / `emailPortalUrlForPath()` (production Vercel), not localhost or GitHub Pages; secure notices include `/messages/?room=…`.
 
 `npm run test:prod-send-guards` locks these in source. `npm run test:http-error-detail`, `npm run test:email-fetch`, and `npm run test:portal-url` lock error copy, EmailJS timeout, and the CTA host.
 

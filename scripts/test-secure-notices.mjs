@@ -49,7 +49,7 @@ for (const intent of createdChannel) {
   assert.equal(intent.secureNotice, true);
   assert.equal(intent.action, SECURE_CHANNEL_ADDED);
   assert.equal(intent.module, "Messages");
-  assert.equal(intent.linkPath, "/messages/");
+  assert.equal(intent.linkPath, "/messages/?room=eng");
 }
 
 const addedLater = buildCollectionIntents(
@@ -96,7 +96,7 @@ for (const intent of createdMessage) {
   assert.equal(intent.secureNotice, true);
   assert.equal(intent.action, SECURE_MESSAGE_RECEIVED);
   assert.equal(intent.module, "Messages");
-  assert.equal(intent.linkPath, "/messages/");
+  assert.equal(intent.linkPath, "/messages/?room=eng");
 }
 
 const dmMessage = buildCollectionIntents(
@@ -112,6 +112,7 @@ const dmMessage = buildCollectionIntents(
   { actorEmail: alice },
 );
 assert.deepEqual(targets(dmMessage), [bob]);
+assert.equal(dmMessage[0].linkPath, `/messages/?room=${encodeURIComponent(dmId)}`);
 
 const editedMessage = buildCollectionIntents(
   "messages",
