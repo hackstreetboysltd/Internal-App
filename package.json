@@ -31,6 +31,7 @@
     "test:message-save": "node --import ./scripts/alias-loader.mjs scripts/test-message-save.mjs",
     "test:message-security": "node --import ./scripts/alias-loader.mjs scripts/test-message-security.mjs",
     "test:hybrid-crypto": "node --import ./scripts/alias-loader.mjs scripts/test-hybrid-crypto.mjs",
+    "test:account-identity": "node --import ./scripts/alias-loader.mjs scripts/test-account-identity.mjs",
     "test:secure-notices": "node --import ./scripts/alias-loader.mjs scripts/test-secure-notices.mjs",
     "wipe:messages": "node scripts/wipe-messages.mjs"
   },

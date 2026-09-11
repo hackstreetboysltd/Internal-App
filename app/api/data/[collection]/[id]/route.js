@@ -15,6 +15,7 @@ import { actorOwnsMessageRecord } from "@/lib/messageSave";
 import { filterMessageItemsForActor } from "@/lib/channels";
 import { redactMessageWrapsForActor } from "@/lib/messageRead";
 import { normalizeEmail } from "@/lib/normalize";
+import { sanitizeItemForClient } from "@/lib/accountIdentity";
 import { collectionUsesSecurityLevel } from "@/lib/securityLevel";
 import { effectiveAdminView } from "@/lib/server/adminRole";
 import { isEmailAllowed } from "@/lib/server/whitelist";
@@ -85,7 +86,7 @@ export const GET = withApi(async (request, routeContext, { session }) => {
     return NextResponse.json(redacted || item);
   }
 
-  return NextResponse.json(item);
+  return NextResponse.json(sanitizeItemForClient(collection, item));
 }, { auth: true, rateLimits: ["ip", "user"] });
 
 export const PATCH = withApi(async (request, routeContext, { session }) => {
@@ -148,7 +149,7 @@ export const PATCH = withApi(async (request, routeContext, { session }) => {
       return NextResponse.json({ error: DENIED }, { status: 403 });
     }
     const updated = await patchCollectionItem(collection, id, authorizedNext, session.email);
-    return NextResponse.json(updated);
+    return NextResponse.json(sanitizeItemForClient(collection, updated));
   }
 
   const patchToApply =

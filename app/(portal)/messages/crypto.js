@@ -1,4 +1,5 @@
 import { ml_kem768 } from "@noble/post-quantum/ml-kem.js";
+import { isPersistedIdentity } from "@/lib/accountIdentity";
 
 export const ENC_VERSION = 5;
 export const DEFAULT_CHANNEL = "direct";
@@ -162,20 +163,6 @@ function identityStorageKey(email) {
     return IDENTITY_PREFIX + (email || "").trim().toLowerCase();
 }
 
-function isPersistedIdentity(parsed) {
-    return !!(
-        parsed
-        && typeof parsed === "object"
-        && Number(parsed.format) === IDENTITY_FORMAT
-        && parsed.publicJwk
-        && parsed.privateJwk
-        && typeof parsed.mlkemPublic === "string"
-        && parsed.mlkemPublic
-        && typeof parsed.mlkemSecret === "string"
-        && parsed.mlkemSecret
-    );
-}
-
 /** Drop the in-memory identity so the next load reads localStorage. */
 export function clearIdentityCache() {
     identityKeys = null;
@@ -204,23 +191,51 @@ export function shouldPublishDeviceMsgPub(existing, next) {
 /**
  * @param {string} email
  */
-export function exportIdentityBackup(email) {
+export function readPersistedIdentity(email) {
     const key = (email || "").trim().toLowerCase();
-    if (!key) throw new Error("Sign in before exporting a device key");
+    if (!key) return null;
     let raw = null;
     try {
         raw = localStorage.getItem(identityStorageKey(key));
     } catch {
-        raw = null;
+        return null;
     }
-    if (!raw) throw new Error("No device key on this browser");
-    let parsed;
+    if (!raw) return null;
     try {
-        parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        return isPersistedIdentity(parsed) ? parsed : null;
     } catch {
-        throw new Error("Device key on this browser is unreadable");
+        return null;
     }
-    if (!isPersistedIdentity(parsed)) throw new Error("Device key on this browser cannot be exported");
+}
+
+/**
+ * @param {string} email
+ * @param {unknown} persisted
+ */
+export async function installPersistedIdentity(email, persisted) {
+    const key = (email || "").trim().toLowerCase();
+    if (!key) throw new Error("Sign in before installing a device key");
+    if (!isPersistedIdentity(persisted)) throw new Error("Device key file is incomplete");
+    clearIdentityCache();
+    try {
+        localStorage.setItem(identityStorageKey(key), JSON.stringify(persisted));
+    } catch {
+        throw new Error("Could not store the device key in this browser");
+    }
+    const identity = await loadIdentity(key);
+    if (!identity) throw new Error("Imported device key could not be loaded");
+    return identity;
+}
+
+/**
+ * @param {string} email
+ */
+export function exportIdentityBackup(email) {
+    const key = (email || "").trim().toLowerCase();
+    if (!key) throw new Error("Sign in before exporting a device key");
+    const parsed = readPersistedIdentity(key);
+    if (!parsed) throw new Error("No device key on this browser");
     return {
         kind: IDENTITY_BACKUP_KIND,
         v: IDENTITY_BACKUP_VERSION,
@@ -242,16 +257,7 @@ export async function importIdentityBackup(email, payload) {
     if (Number(row.v) !== IDENTITY_BACKUP_VERSION) throw new Error("Unsupported device key file");
     const fileEmail = String(row.email || "").trim().toLowerCase();
     if (fileEmail !== key) throw new Error("This key belongs to a different account");
-    if (!isPersistedIdentity(row.identity)) throw new Error("Device key file is incomplete");
-    clearIdentityCache();
-    try {
-        localStorage.setItem(identityStorageKey(key), JSON.stringify(row.identity));
-    } catch {
-        throw new Error("Could not store the device key in this browser");
-    }
-    const identity = await loadIdentity(key);
-    if (!identity) throw new Error("Imported device key could not be loaded");
-    return identity;
+    return installPersistedIdentity(key, row.identity);
 }
 
 export function hasLocalIdentity(email) {

@@ -20,17 +20,22 @@ import {
     decryptMessage,
     encryptSealedEnvelope,
     exportIdentityBackup,
+    hasLocalIdentity,
     identityMsgPub,
     importIdentityBackup,
+    installPersistedIdentity,
     isEnvelopeMessage,
     isCipherRecord,
     loadIdentity,
     messageChannel,
     normalizeChannel,
     normalizeMsgPub,
+    readPersistedIdentity,
     resolveRecipientMsgPub,
     shouldPublishDeviceMsgPub,
 } from "./crypto";
+import { accountIdentityPlan } from "@/lib/accountIdentity";
+import { fetchAccountMessageIdentity, uploadAccountMessageIdentity } from "@/lib/messageIdentityApi";
 import { dmChannelId, filterChannelsForActor, findDmChannel, isDmChannel, messageChannelTabs, otherDmMember } from "@/lib/channels";
 import { formatPortalCreatedStamp, formatPortalDateTime } from "@/lib/portalTime";
 import {
@@ -293,6 +298,17 @@ async function publishMessagePublicKey(msgPub, email, setUsers, opts = {}) {
     }
 }
 
+async function localUnlocksAny(messages, email) {
+    for (const m of messages || []) {
+        if (!isEnvelopeMessage(m)) continue;
+        const result = await decryptMessage(m, null, email);
+        if (result !== DECRYPT_MISMATCH && result !== DECRYPT_INVALID && result !== NOT_ADDRESSED) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function DeviceKeyMenu({ onExport, onImport }) {
     return (
         <ItemMenu
@@ -345,6 +361,8 @@ export default function MessagesClient() {
     const composeEditorRef = useRef(null);
     const importFileRef = useRef(null);
     const threadEndRef = useRef(null);
+    const messagesRef = useRef([]);
+    const messagesLoadFailedRef = useRef(false);
     const timers = useRef([]);
     const later = (fn, ms) => {
         const id = setTimeout(fn, ms);
@@ -361,6 +379,7 @@ export default function MessagesClient() {
     const [roomQuery, setRoomQuery] = useState("");
     const [openRoom, setOpenRoom] = useState(null);
     const [identityReady, setIdentityReady] = useState(false);
+    const [awaitingAccountKey, setAwaitingAccountKey] = useState(false);
     const [identityPub, setIdentityPub] = useState(null);
     const [decoded, setDecoded] = useState({});
     const decryptCacheRef = useRef(new Map());
@@ -430,22 +449,73 @@ export default function MessagesClient() {
         }
     }, []);
 
-    const ensureIdentity = useCallback(async (email) => {
+    const activateIdentity = async (key, identity, publishReplace) => {
+        const msgPub = identity ? identityMsgPub(identity) : null;
+        setIdentityReady(!!identity);
+        setIdentityPub(msgPub);
+        setAwaitingAccountKey(false);
+        decryptCacheRef.current = new Map();
+        if (msgPub) {
+            await publishMessagePublicKey(msgPub, key, setUsers, { replace: publishReplace });
+        }
+        return identity;
+    };
+
+    const ensureIdentity = useCallback(async (email, mail) => {
         const key = (email || "").trim().toLowerCase();
         if (!key) {
             setIdentityReady(false);
             setIdentityPub(null);
+            setAwaitingAccountKey(false);
             return null;
         }
         try {
+            const account = await fetchAccountMessageIdentity();
+            if (account) {
+                const identity = await installPersistedIdentity(key, account);
+                return activateIdentity(key, identity, true);
+            }
+
+            const inbox = Array.isArray(mail) ? mail : messagesRef.current;
+            const existingMail = inbox.some((m) => isEnvelopeMessage(m));
+            let localUnlocksMail = false;
+            if (existingMail && hasLocalIdentity(key)) {
+                localUnlocksMail = await localUnlocksAny(inbox, key);
+            }
+            const plan = accountIdentityPlan({
+                hasAccountIdentity: false,
+                existingMail,
+                localUnlocksMail,
+                inboxUnreliable: messagesLoadFailedRef.current,
+            });
+
+            if (plan === "wait-for-account") {
+                setIdentityReady(false);
+                setIdentityPub(null);
+                setAwaitingAccountKey(true);
+                return null;
+            }
+
             const identity = await loadIdentity(key);
-            const msgPub = identity ? identityMsgPub(identity) : null;
-            setIdentityReady(!!identity);
-            setIdentityPub(msgPub);
-            if (msgPub) await publishMessagePublicKey(msgPub, key, setUsers);
-            return identity;
+            const persisted = readPersistedIdentity(key);
+            if (persisted) {
+                const uploaded = await uploadAccountMessageIdentity(persisted);
+                if (uploaded.conflict && uploaded.identity) {
+                    const installed = await installPersistedIdentity(key, uploaded.identity);
+                    return activateIdentity(key, installed, true);
+                }
+            }
+            return activateIdentity(key, identity, true);
         } catch (e) {
-            console.warn("Device key setup failed:", e);
+            console.warn("Device key sync failed:", e);
+            try {
+                if (hasLocalIdentity(key)) {
+                    const local = await loadIdentity(key);
+                    return activateIdentity(key, local, false);
+                }
+            } catch {
+                /* keep failed */
+            }
             setIdentityReady(false);
             return null;
         }
@@ -486,9 +556,14 @@ export default function MessagesClient() {
                 return;
             }
             const identity = await importIdentityBackup(actorEmail, payload);
+            const persisted = readPersistedIdentity(actorEmail);
+            if (persisted) {
+                await uploadAccountMessageIdentity(persisted, { replace: true });
+            }
             const msgPub = identity ? identityMsgPub(identity) : null;
             setIdentityReady(!!identity);
             setIdentityPub(msgPub);
+            setAwaitingAccountKey(false);
             decryptCacheRef.current = new Map();
             setDecoded({});
             if (msgPub) await publishMessagePublicKey(msgPub, actorEmail, setUsers, { replace: true });
@@ -510,6 +585,7 @@ export default function MessagesClient() {
         };
         const u1 = watch("messages", (raw) => {
             const list = Array.isArray(raw) ? raw : [];
+            messagesLoadFailedRef.current = false;
             setMessages(list.filter(isEnvelopeMessage).map((m) => ({
                 ...m,
                 channel: messageChannel(m),
@@ -519,6 +595,7 @@ export default function MessagesClient() {
             admin: false,
             onError: (e) => {
                 console.error("Error fetching messages:", e);
+                messagesLoadFailedRef.current = true;
                 setMessages([]);
                 mark("messages");
             },
@@ -561,9 +638,22 @@ export default function MessagesClient() {
     }, [loading, channelCatalog, openRoom]);
 
     useEffect(() => {
-        const t = setTimeout(() => { ensureIdentity(actorEmail); }, 0);
+        messagesRef.current = messages;
+    }, [messages]);
+
+    useEffect(() => {
+        if (loading) return undefined;
+        const t = setTimeout(() => { ensureIdentity(actorEmail, messagesRef.current); }, 0);
         return () => clearTimeout(t);
-    }, [actorEmail, ensureIdentity]);
+    }, [actorEmail, loading, ensureIdentity]);
+
+    useEffect(() => {
+        if (!awaitingAccountKey || !actorEmail) return undefined;
+        const id = setInterval(() => {
+            ensureIdentity(actorEmail, messagesRef.current);
+        }, 4000);
+        return () => clearInterval(id);
+    }, [awaitingAccountKey, actorEmail, ensureIdentity]);
 
     const decryptTargets = useMemo(() => {
         if (openRoom) {
@@ -649,7 +739,7 @@ export default function MessagesClient() {
         () => threadMsgs.some((m) => decoded[m.id]?.decResult === DECRYPT_MISMATCH),
         [threadMsgs, decoded],
     );
-    const showKeyHelp = deviceKeyDrift || threadHasMismatch;
+    const showKeyHelp = awaitingAccountKey || deviceKeyDrift || threadHasMismatch;
 
     useEffect(() => {
         if (!openRoom) return;
@@ -800,7 +890,11 @@ export default function MessagesClient() {
             return false;
         }
 
-        await ensureIdentity(email);
+        const identity = await ensureIdentity(email, messagesRef.current);
+        if (!identity) {
+            alert("This browser does not have your account message key yet. Open Messages once where they already read, then refresh.");
+            return false;
+        }
 
         let recipients;
         if (room === DIRECT_CHANNEL) {
@@ -1235,7 +1329,9 @@ export default function MessagesClient() {
                                             )}
                                             {showKeyHelp ? (
                                                 <p className="msg-key-drift">
-                                                    This browser cannot unlock these messages. Export the device key from the browser that can read them, then import it here.
+                                                    {awaitingAccountKey
+                                                        ? "Waiting for your account key. Open Messages once on the browser that can already read them — this tab will pick it up."
+                                                        : "This browser cannot unlock these messages yet. Open Messages once where they already read, or import a key backup."}
                                                     {" "}
                                                     <button type="button" className="msg-key-link" onClick={openImportDeviceKey}>
                                                         Import key
@@ -1300,6 +1396,7 @@ export default function MessagesClient() {
                                                 className={`msg-send-btn${editId ? " is-confirm" : ""}`}
                                                 busy={formBusy}
                                                 busyLabel=""
+                                                disabled={awaitingAccountKey}
                                                 onClick={editId ? saveEditMessage : sendFromComposer}
                                                 aria-label={formBusy ? (editId ? "Saving edit" : "Sending") : (editId ? "Save edit" : "Send")}
                                             >

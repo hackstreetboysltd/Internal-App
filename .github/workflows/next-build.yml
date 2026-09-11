@@ -81,6 +81,8 @@ jobs:
           node --import ./scripts/alias-loader.mjs scripts/test-email-copy.mjs
           npm run test:secure-notices
           npm run test:hybrid-crypto
+          npm run test:account-identity
+          npm run test:message-security
 
       - name: Build (server mode)
         run: npm run build
