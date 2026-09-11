@@ -148,13 +148,32 @@ Point users back at the previous static GitHub Pages app if needed. Redis sessio
 
 ## Messages: decryption key mismatch
 
-`[Decryption Key Mismatch]` means this browser does not have the account identity those envelopes were sealed to. `localhost` and production are different origins, so `localStorage` is not shared even on the same laptop.
+`[Decryption Key Mismatch]` or a stuck “Waiting for your account key” banner means this browser does not have the account identity those envelopes were sealed to. `localhost` and production are different origins, so `localStorage` is not shared even on the same laptop.
 
-1. Open Messages once on the origin that can already read the thread (usually local). That upload writes the account key.
-2. Reload (or wait a few seconds) on the failing origin — it installs the account key after sign-in.
-3. Break-glass: key menu → Export / Import. Do not paste the key into chat, tickets, or logs.
+```mermaid
+sequenceDiagram
+  participant Local as Local Messages
+  participant API as Identity API
+  participant DB as Shared Postgres
+  participant Prod as Production Messages
+  Local->>API: GET /api/messages/identity
+  API->>DB: unwrap with DB wrap key
+  alt blob still SESSION_SECRET-wrapped
+    API->>DB: unwrap with local SESSION_SECRET then rewrap
+  end
+  API-->>Local: account identity
+  Local->>API: PUT if this browser already unlocks mail
+  Prod->>API: GET /api/messages/identity
+  API->>DB: unwrap with DB wrap key
+  API-->>Prod: same account identity
+```
 
-The host can unwrap `msgIdentityEnc` (it is wrapped with `SESSION_SECRET`, not E2EE against the server). Teammates still cannot read another user’s private identity. After rotating `SESSION_SECRET`, open Messages once on a browser that can already read so the blob can be rewritten.
+1. Deploy this build to Vercel (production must use the database wrap key).
+2. Open Messages once on the origin that can already read the thread (usually local). That read rewraps any `SESSION_SECRET` blob and uploads if needed.
+3. Reload (or wait a few seconds) on the failing origin — it installs the account key after sign-in.
+4. Break-glass: key menu → Export / Import. Do not paste the key into chat, tickets, or logs.
+
+The host can unwrap `msgIdentityEnc` (it is wrapped with a key stored in `message_identity_wrap_keys`, not E2EE against the server). Teammates still cannot read another user’s private identity. `SESSION_SECRET` rotation no longer locks production out of a key written from `start.sh`.
 
 ## Load check
 

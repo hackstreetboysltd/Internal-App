@@ -15,7 +15,13 @@ const {
   sanitizeItemForClient,
   MSG_IDENTITY_ENC_FIELD,
 } = await import("../lib/accountIdentity.js");
-const { wrapMessageIdentity, unwrapMessageIdentity } = await import("../lib/server/messageIdentityCrypto.js");
+const {
+  wrapMessageIdentity,
+  unwrapMessageIdentity,
+  unwrapMessageIdentityWithKeys,
+  sessionIdentityWrapKey,
+  deriveIdentityWrapKey,
+} = await import("../lib/server/messageIdentityCrypto.js");
 const { authorizeCollectionSave } = await import("../lib/server/authorize.js");
 
 assert.equal(accountIdentityPlan({ hasAccountIdentity: true, existingMail: true, localUnlocksMail: false }), "install-account");
@@ -40,6 +46,24 @@ assert.notEqual(JSON.stringify(wrapped).includes("secret-d"), true);
 const opened = unwrapMessageIdentity(wrapped);
 assert.equal(opened.mlkemSecret, "sec");
 assert.equal(opened.privateJwk.d, "secret-d");
+
+const localKey = sessionIdentityWrapKey();
+const otherKey = deriveIdentityWrapKey("definitely-not-the-local-or-prod-secret");
+assert.throws(
+  () => unwrapMessageIdentity(wrapped, otherKey),
+  /identity|auth|Unsupported|Invalid|bad decrypt|unable to authenticate/i,
+  "SESSION_SECRET mismatch must not unwrap — this is why production stayed locked",
+);
+const fallback = unwrapMessageIdentityWithKeys(wrapped, [otherKey, localKey]);
+assert.equal(fallback.identity.mlkemSecret, "sec");
+assert.equal(fallback.keyIndex, 1, "shared-db wrap key is tried first; session secret is fallback");
+
+const dbKey = deriveIdentityWrapKey("shared-database-wrap-key");
+const dbWrapped = wrapMessageIdentity(identity, dbKey);
+process.env.SESSION_SECRET = "rotated-environment-secret";
+assert.equal(unwrapMessageIdentity(dbWrapped, dbKey).mlkemSecret, "sec");
+assert.throws(() => unwrapMessageIdentity(dbWrapped), /identity|auth|Unsupported|Invalid|bad decrypt|unable to authenticate/i);
+process.env.SESSION_SECRET = "test-session-secret-for-identity-wrap";
 
 const listed = stripMsgIdentityEnc({ email: "a@b.c", [MSG_IDENTITY_ENC_FIELD]: wrapped, name: "A" });
 assert.equal(listed.email, "a@b.c");

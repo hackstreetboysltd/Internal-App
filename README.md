@@ -1,5 +1,7 @@
 # HackstreetBoys Internal Portal
 
+Last updated: 2026-09-10 11:51 PM CDT
+
 Next.js server-backed internal portal with Google OAuth, PostgreSQL, Redis, and admin observability.
 
 ## Guardrails
@@ -8,7 +10,7 @@ Next.js server-backed internal portal with Google OAuth, PostgreSQL, Redis, and 
 - **Session UI keys:** `activeModule`, `isAdminView`, `messages.vault.*`, `portalTabSessionId` in sessionStorage only — not auth state.
 - **Data:** PostgreSQL via `/api/data/*` and `/api/sync/*`; portal modules use `lib/portalApi.js` → HTTP + `lib/cacheManager.js`.
 - **Visual:** Reuse existing module CSS. No Tailwind or component-library redesign.
-- **Messages:** Client-side hybrid sealed envelopes in `messages/crypto.js` (ENC v5: ECDH P-256 + ML-KEM-768). After Google sign-in, the owner’s private identity syncs through `GET/PUT /api/messages/identity` (AES-GCM wrapped with `SESSION_SECRET` on the profile row; never returned on `profile` collection reads). `localStorage` is a cache. A new origin that cannot unlock existing mail waits instead of minting a new key; the browser that can already read uploads once, then every signed-in device installs that account key. Export/import remains a break-glass backup. Successful edits persist `editedAt` and show an Edited badge on the bubble (original send time stays). Do not weaken wrap types or lower `ENC_VERSION` without a migration plan. New group-channel members and new message recipients get a generic EmailJS notice (no ciphertext, no sender name). Opening a DM does not send the channel-added mail.
+- **Messages:** Client-side hybrid sealed envelopes in `messages/crypto.js` (ENC v5: ECDH P-256 + ML-KEM-768). After Google sign-in, the owner’s private identity syncs through `GET/PUT /api/messages/identity` (AES-GCM wrapped with a database-resident key on the profile row; never returned on `profile` collection reads). `SESSION_SECRET` is only a fallback for older blobs — local `start.sh` and Vercel mint different session secrets, so wrapping with that secret left production unable to unwrap a key written from localhost. `localStorage` is a cache. A new origin that cannot unlock existing mail waits instead of minting a new key; the browser that can already read uploads once, then every signed-in device installs that account key. Export/import remains a break-glass backup. Successful edits persist `editedAt` and show an Edited badge on the bubble (original send time stays). Do not weaken wrap types or lower `ENC_VERSION` without a migration plan. New group-channel members and new message recipients get a generic EmailJS notice (no ciphertext, no sender name). Opening a DM does not send the channel-added mail.
 - **Admin UX:** Header admin toggle; messages dock becomes Role Access in admin view; observability at `/admin/observability/`.
 - **Host:** Vercel (Next.js) + Neon (Postgres) + Upstash (Redis). See [docs/RUNBOOK.md](docs/RUNBOOK.md).
 - **Firebase:** Retained **only** for GitHub OAuth in `/github-connect/` (Apps changelogs). All module data is in Postgres.
