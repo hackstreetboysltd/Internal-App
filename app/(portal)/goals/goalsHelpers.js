@@ -228,3 +228,133 @@ export function cloneRecords(list) {
         goals: Array.isArray(r.goals) ? r.goals.map((g) => ({ ...g })) : [],
     }));
 }
+
+/**
+ * Portal-approved teammate: not pending/rejected, and on the allowed list when one exists.
+ * @param {{ email?: string, approvedStatus?: string } | null | undefined} user
+ * @param {string[] | null | undefined} allowedEmails
+ */
+export function isApprovedMember(user, allowedEmails) {
+    const email = (user && user.email ? String(user.email) : "").trim().toLowerCase();
+    if (!email) return false;
+    const status = String((user && user.approvedStatus) || "").toLowerCase();
+    if (status === "rejected" || status === "pending") return false;
+    const allowed = (allowedEmails || [])
+        .map((e) => (e || "").trim().toLowerCase())
+        .filter(Boolean);
+    if (allowed.length > 0) return allowed.includes(email);
+    return status === "approved";
+}
+
+/**
+ * @param {Array<{ email?: string, name?: string, approvedStatus?: string }>} users
+ * @param {string[] | null | undefined} allowedEmails
+ */
+export function listApprovedMembers(users, allowedEmails) {
+    return (users || [])
+        .filter((user) => isApprovedMember(user, allowedEmails))
+        .sort((a, b) => {
+            const an = ((a.name || "").trim() || a.email || "");
+            const bn = ((b.name || "").trim() || b.email || "");
+            return an.localeCompare(bn, undefined, { sensitivity: "base" });
+        });
+}
+
+function emptyHorizonStats() {
+    return Object.fromEntries(HORIZONS.map((horizon) => [horizon, { set: 0, achieved: 0 }]));
+}
+
+function defaultResolveEmail(record) {
+    return ((record && record.email) || "").trim().toLowerCase();
+}
+
+/**
+ * Flatten a member's personal, non-pending goal items (newest first).
+ * @param {unknown[]} records
+ * @param {string} email
+ * @param {(record: object) => string} [resolveEmail]
+ */
+export function listMemberGoalItems(records, email, resolveEmail = defaultResolveEmail) {
+    const key = (email || "").trim().toLowerCase();
+    const items = [];
+    for (const record of records || []) {
+        if (!isPersonalGoalRecord(record) || !recordBelongsToEmail(record, key, resolveEmail)) continue;
+        const type = resolveGoalType(record);
+        const goals = Array.isArray(record.goals) ? record.goals : [];
+        goals.forEach((goal, index) => {
+            if (!goal) return;
+            items.push({
+                id: `${record.id ?? "row"}-${index}`,
+                recordId: record.id,
+                index,
+                text: goal.text || "",
+                done: !!goal.done,
+                type,
+                createdAt: getGoalCreatedTime(record),
+            });
+        });
+    }
+    items.sort((a, b) => {
+        if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+        const na = Number(a.recordId);
+        const nb = Number(b.recordId);
+        if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return nb - na;
+        return (a.index || 0) - (b.index || 0);
+    });
+    return items;
+}
+
+/**
+ * Personal, non-pending goals for one member: items set vs marked done.
+ * @param {unknown[]} records
+ * @param {string} email
+ * @param {(record: object) => string} [resolveEmail]
+ */
+export function summarizeMemberGoals(records, email, resolveEmail = defaultResolveEmail) {
+    const key = (email || "").trim().toLowerCase();
+    const items = listMemberGoalItems(records, key, resolveEmail);
+    const byHorizon = emptyHorizonStats();
+    let achieved = 0;
+    for (const item of items) {
+        if (item.done) achieved += 1;
+        if (byHorizon[item.type]) {
+            byHorizon[item.type].set += 1;
+            if (item.done) byHorizon[item.type].achieved += 1;
+        }
+    }
+    return { email: key, set: items.length, achieved, byHorizon, items };
+}
+
+/**
+ * @param {unknown[]} users
+ * @param {string[] | null | undefined} allowedEmails
+ * @param {unknown[]} records
+ * @param {(record: object) => string} [resolveEmail]
+ */
+export const MEMBER_GOAL_STATUS_FILTERS = ["all", "completed", "open"];
+
+/**
+ * @param {Array<{ done?: boolean }>} items
+ * @param {string} status
+ */
+export function filterMemberGoalItems(items, status) {
+    const list = Array.isArray(items) ? items : [];
+    if (status === "completed") return list.filter((item) => item && item.done);
+    if (status === "open") return list.filter((item) => item && !item.done);
+    return list;
+}
+
+export function buildMemberGoalDetails(users, allowedEmails, records, resolveEmail = defaultResolveEmail) {
+    return listApprovedMembers(users, allowedEmails).map((user) => {
+        const email = (user.email || "").trim().toLowerCase();
+        const stats = summarizeMemberGoals(records, email, resolveEmail);
+        return {
+            email,
+            name: ((user.name || "").trim() || email),
+            set: stats.set,
+            achieved: stats.achieved,
+            byHorizon: stats.byHorizon,
+            items: stats.items,
+        };
+    });
+}

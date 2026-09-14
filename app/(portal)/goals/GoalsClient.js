@@ -17,6 +17,8 @@ import {
     capitalize,
     cloneRecords,
     computePeriodId,
+    buildMemberGoalDetails,
+    filterMemberGoalItems,
     directoryEmails,
     formatGoalCreatedStamp,
     formatGoalText,
@@ -184,6 +186,205 @@ function GoalHtml({ text, apps, as, style, className }) {
     return <Tag className={className} style={style} dangerouslySetInnerHTML={{ __html: formatGoalText(text, apps) }} />;
 }
 
+function completionPercent(set, achieved) {
+    if (!set) return 0;
+    return Math.round((achieved / set) * 100);
+}
+
+function MemberGoalDetailsPage({
+    members,
+    mode,
+    onMode,
+    selectedIndex,
+    onSelect,
+    onClose,
+    apps,
+}) {
+    const selected = members[selectedIndex] || null;
+    const [goalPage, setGoalPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState("all");
+    const selectedEmail = selected ? selected.email : "";
+    useEffect(() => { setGoalPage(1); }, [selectedEmail, statusFilter]);
+    useEffect(() => {
+        const onKey = (event) => {
+            if (event.key === "Escape") onClose();
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const memberGoals = selected && Array.isArray(selected.items) ? selected.items : [];
+    const completedCount = memberGoals.filter((item) => item.done).length;
+    const openCount = memberGoals.length - completedCount;
+    const visibleGoals = filterMemberGoalItems(memberGoals, statusFilter);
+    const goalMaxPage = Math.max(1, Math.ceil(visibleGoals.length / WORKSPACE_ITEMS_PER_PAGE));
+    const safeGoalPage = Math.min(Math.max(1, goalPage), goalMaxPage);
+    const goalStart = (safeGoalPage - 1) * WORKSPACE_ITEMS_PER_PAGE;
+    const pageGoals = visibleGoals.slice(goalStart, goalStart + WORKSPACE_ITEMS_PER_PAGE);
+    const emptyFilterCopy = statusFilter === "completed"
+        ? "No completed goals to show."
+        : statusFilter === "open"
+            ? "No open goals to show."
+            : "No personal goals for this member.";
+
+    return (
+        <section className="goal-details-page" aria-labelledby="goal-details-title">
+            <div className="goal-details-bar">
+                <button type="button" className="goal-details-back" onClick={onClose}>
+                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    Back
+                </button>
+                <h3 id="goal-details-title" className="sr-only">Member goal details</h3>
+                <label className="goal-details-field" htmlFor="goalDetailsView">
+                    <span>View</span>
+                    <select id="goalDetailsView" value={mode} onChange={(e) => onMode(e.target.value)}>
+                        <option value="one">One by one</option>
+                        <option value="compare">Compare all</option>
+                    </select>
+                </label>
+                {mode === "one" && selected ? (
+                    <>
+                        <label className="goal-details-field goal-details-field-grow" htmlFor="goalDetailsMember">
+                            <span>Member</span>
+                            <select
+                                id="goalDetailsMember"
+                                value={selected.email}
+                                onChange={(e) => {
+                                    const next = members.findIndex((m) => m.email === e.target.value);
+                                    if (next >= 0) onSelect(next);
+                                }}
+                            >
+                                {members.map((member) => (
+                                    <option key={member.email} value={member.email}>
+                                        {member.name} — {member.email}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <p className="goal-details-metrics">
+                            <span><strong>{selected.set}</strong> set</span>
+                            <span className="goal-details-metrics-sep" aria-hidden="true">·</span>
+                            <span><strong>{selected.achieved}</strong> done</span>
+                            <span className="goal-details-metrics-sep" aria-hidden="true">·</span>
+                            <span><strong>{selected.set ? `${completionPercent(selected.set, selected.achieved)}%` : "—"}</strong></span>
+                        </p>
+                        <label className="goal-details-field" htmlFor="goalDetailsStatus">
+                            <span>Status</span>
+                            <select
+                                id="goalDetailsStatus"
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                            >
+                                <option value="all">All ({memberGoals.length})</option>
+                                <option value="completed">Completed ({completedCount})</option>
+                                <option value="open">Not completed ({openCount})</option>
+                            </select>
+                        </label>
+                    </>
+                ) : null}
+            </div>
+
+            {members.length === 0 ? (
+                <div className="empty-state">
+                    <p>No approved members to show.</p>
+                </div>
+            ) : mode === "compare" ? (
+                <div className="goal-details-compare-wrap">
+                    <table className="goal-details-table">
+                        <caption className="sr-only">Approved members with goals set and achieved</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Member</th>
+                                <th scope="col">Set</th>
+                                <th scope="col">Achieved</th>
+                                <th scope="col">Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {members.map((member, idx) => {
+                                const pct = completionPercent(member.set, member.achieved);
+                                return (
+                                    <tr key={member.email}>
+                                        <th scope="row">
+                                            <button
+                                                type="button"
+                                                className="goal-details-name-btn"
+                                                onClick={() => { onSelect(idx); onMode("one"); }}
+                                            >
+                                                <span className="goal-details-name">{member.name}</span>
+                                                <span className="goal-details-email">{member.email}</span>
+                                            </button>
+                                        </th>
+                                        <td>{member.set}</td>
+                                        <td>{member.achieved}</td>
+                                        <td>
+                                            <div
+                                                className="goal-details-bar-meter"
+                                                role="progressbar"
+                                                aria-valuemin={0}
+                                                aria-valuemax={100}
+                                                aria-valuenow={pct}
+                                                aria-label={`${member.achieved} of ${member.set} goals achieved`}
+                                            >
+                                                <span style={{ width: `${pct}%` }}></span>
+                                            </div>
+                                            <span className="goal-details-pct">{member.set ? `${pct}%` : "—"}</span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : memberGoals.length === 0 ? (
+                <div className="empty-state">
+                    <p>No personal goals for this member.</p>
+                </div>
+            ) : visibleGoals.length === 0 ? (
+                <div className="empty-state">
+                    <p>{emptyFilterCopy}</p>
+                </div>
+            ) : (
+                <>
+                    <ul className="goal-details-list">
+                        {pageGoals.map((item) => (
+                            <li key={item.id} className={`goal-details-item${item.done ? " is-done" : ""}`}>
+                                <input
+                                    type="checkbox"
+                                    className="goal-checkbox"
+                                    checked={item.done}
+                                    disabled
+                                    readOnly
+                                    aria-label={item.done ? "Achieved" : "Not achieved"}
+                                />
+                                <GoalHtml
+                                    className="goal-details-item-text"
+                                    text={item.text || "Untitled goal"}
+                                    apps={apps}
+                                    as="div"
+                                />
+                                <span className="goal-details-item-horizon">{capitalize(item.type)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    {visibleGoals.length > WORKSPACE_ITEMS_PER_PAGE ? (
+                        <PaginationBar
+                            compact
+                            start={goalStart + 1}
+                            end={Math.min(goalStart + WORKSPACE_ITEMS_PER_PAGE, visibleGoals.length)}
+                            total={visibleGoals.length}
+                            prevDisabled={safeGoalPage === 1}
+                            nextDisabled={goalStart + WORKSPACE_ITEMS_PER_PAGE >= visibleGoals.length}
+                            onPrev={() => setGoalPage((p) => Math.max(1, p - 1))}
+                            onNext={() => setGoalPage((p) => p + 1)}
+                        />
+                    ) : null}
+                </>
+            )}
+        </section>
+    );
+}
+
 function WorkspaceSkeleton() {
     return (
         <div className="goals-skeleton" aria-busy="true" aria-label="Loading goals">
@@ -280,6 +481,9 @@ export default function GoalsClient() {
     const [notifyShown, setNotifyShown] = useState(false);
     const [notifyTarget, setNotifyTarget] = useState(null);
     const [notifyMessage, setNotifyMessage] = useState("");
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [detailsMode, setDetailsMode] = useState("compare");
+    const [detailsIndex, setDetailsIndex] = useState(0);
     const { busy: formBusy, runBusy: runFormBusy } = useBusy();
     const { busy: notifyBusy, runBusy: runNotifyBusy } = useBusy();
 
@@ -421,6 +625,10 @@ export default function GoalsClient() {
     };
 
     const directory = useMemo(() => getDirectoryUsers(users, allowedEmails), [users, allowedEmails]);
+    const memberGoalDetails = useMemo(
+        () => buildMemberGoalDetails(users, allowedEmails, records, goalEmail),
+        [users, allowedEmails, records, goalEmail],
+    );
     const memberOptions = useMemo(() => {
         const teammates = [...directory]
             .filter((p) => (p.email || "").trim())
@@ -876,6 +1084,16 @@ export default function GoalsClient() {
         }
     };
 
+    const openMemberDetails = () => {
+        const filtered = (memberFilter || "").trim().toLowerCase();
+        const match = filtered && filtered !== "all"
+            ? memberGoalDetails.findIndex((m) => m.email === filtered)
+            : -1;
+        setDetailsMode(match >= 0 ? "one" : "compare");
+        setDetailsIndex(match >= 0 ? match : 0);
+        setDetailsOpen(true);
+    };
+
     const handleRefresh = async () => {
         setRefreshSpin(true);
         try {
@@ -1229,9 +1447,9 @@ export default function GoalsClient() {
     );
 
     return (
-        <div className="goals-module">
+        <div className={`goals-module${detailsOpen ? " is-details" : ""}`}>
             <div className="container">
-                <div className="header-container" style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", alignItems: "center", marginBottom: 24, borderBottom: "1px solid var(--border-color)", paddingBottom: 16 }}>
+                <div className="header-container" style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", alignItems: "center", marginBottom: detailsOpen ? 12 : 24, borderBottom: "1px solid var(--border-color)", paddingBottom: detailsOpen ? 10 : 16 }}>
                     <div></div>
                     <h2 style={{ margin: "0 auto", borderBottom: "none", paddingBottom: 0, fontSize: "1.8rem", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                         <span>Goals</span>
@@ -1246,6 +1464,18 @@ export default function GoalsClient() {
                     </div>
                 </div>
 
+                {detailsOpen ? (
+                    <MemberGoalDetailsPage
+                        members={memberGoalDetails}
+                        mode={detailsMode}
+                        onMode={setDetailsMode}
+                        selectedIndex={Math.min(detailsIndex, Math.max(0, memberGoalDetails.length - 1))}
+                        onSelect={setDetailsIndex}
+                        onClose={() => setDetailsOpen(false)}
+                        apps={apps}
+                    />
+                ) : (
+                <>
                 <div className="workspace-toolbar">
                     <div className="search-input-wrapper">
                         <input type="text" placeholder="Search keyword..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setWorkspacePage(1); }} />
@@ -1262,9 +1492,16 @@ export default function GoalsClient() {
                         <WorkspaceSelect title="Filter by timeframe" value={timeframe} options={HORIZON_OPTIONS} onChange={(v) => { setTimeframe(v); setWorkspacePage(1); }} />
                         <WorkspaceSelect title="Filter by team member" value={memberFilter} options={memberOptions} onChange={(v) => { userSetMemberFilter.current = true; setMemberFilter(v); setWorkspacePage(1); }} />
                     </div>
-                    <button type="button" className="add-goal-btn" onClick={openUnifiedNew}>
-                        <i className="fa-solid fa-plus"></i> New Goal
-                    </button>
+                    <div className="workspace-toolbar-actions">
+                        {isAdminView ? (
+                            <button type="button" className="details-goal-btn" onClick={openMemberDetails}>
+                                <i className="fa-solid fa-chart-simple" aria-hidden="true"></i> Details
+                            </button>
+                        ) : null}
+                        <button type="button" className="add-goal-btn" onClick={openUnifiedNew}>
+                            <i className="fa-solid fa-plus"></i> New Goal
+                        </button>
+                    </div>
                 </div>
                 {loading ? <WorkspaceSkeleton /> : (
                     <>
@@ -1339,6 +1576,8 @@ export default function GoalsClient() {
                             />
                         )}
                     </>
+                )}
+                </>
                 )}
             </div>
 
