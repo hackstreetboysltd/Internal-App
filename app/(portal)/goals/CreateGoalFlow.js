@@ -4,7 +4,7 @@ import CreateReviewFlow, {
   CreateReviewField,
   CreateReviewRow,
 } from "@/components/CreateReviewFlow";
-import { itemsLabelForType } from "./goalsHelpers";
+import { displayGoalText, encodeAppMentions, itemsLabelForType } from "./goalsHelpers";
 
 const STEPS = [
   {
@@ -28,6 +28,7 @@ export default function CreateGoalFlow({
   editText,
   goalEditor,
   draftList,
+  apps = [],
   isAdminView = false,
   scope,
   setScope,
@@ -40,7 +41,7 @@ export default function CreateGoalFlow({
   onShowRequirements,
 }) {
   const resolvedItems = (draftItems || [])
-    .map((d) => (editingKey === d.key ? editText : d.text).trim())
+    .map((d) => encodeAppMentions(editingKey === d.key ? editText : d.text, apps).trim())
     .filter(Boolean);
 
   const validateDetails = () => {
@@ -153,7 +154,7 @@ export default function CreateGoalFlow({
             {resolvedItems.length ? (
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {resolvedItems.map((text, i) => (
-                  <li key={`review-goal-${i}`}>{text}</li>
+                  <li key={`review-goal-${i}`}>{displayGoalText(text, apps)}</li>
                 ))}
               </ul>
             ) : "—"}

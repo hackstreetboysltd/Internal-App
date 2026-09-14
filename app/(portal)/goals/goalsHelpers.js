@@ -146,36 +146,112 @@ export function escapeRegExp(string) {
     return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function appMentionRegex() {
+    return /@app:([A-Za-z0-9_-]+)/g;
+}
+
 function sortedApps(apps) {
     return [...(apps || [])]
         .filter((app) => app && app.name)
         .sort((a, b) => b.name.length - a.name.length);
 }
 
-export function formatGoalText(text, apps) {
+function appById(apps, id) {
+    const key = String(id);
+    return (apps || []).find((app) => app && String(app.id) === key) || null;
+}
+
+function mentionSpan(name, id, forInput) {
+    const ce = forInput ? ' contenteditable="false"' : "";
+    const data = id != null && id !== "" ? ` data-app-id="${escapeHtml(String(id))}"` : "";
+    return `<span style="color: #c084fc; font-weight: 600;"${ce}${data}>@${escapeHtml(name)}</span>`;
+}
+
+export function appMentionToken(id) {
+    return `@app:${id}`;
+}
+
+export function displayGoalText(text, apps) {
+    if (!text) return "";
+    return String(text).replace(appMentionRegex(), (full, id) => {
+        const app = appById(apps, id);
+        return app && app.name ? `@${app.name}` : full;
+    });
+}
+
+export function encodeAppMentions(text, apps) {
+    let out = String(text || "");
+    sortedApps(apps).forEach((app) => {
+        if (app.id == null || app.id === "" || !app.name) return;
+        const regex = new RegExp(`@${escapeRegExp(app.name)}(?![:\\w])`, "gi");
+        out = out.replace(regex, appMentionToken(app.id));
+    });
+    return out;
+}
+
+function formatGoalTextShared(text, apps, forInput) {
     if (!text) return "";
     let escaped = escapeHtml(text);
+    escaped = escaped.replace(appMentionRegex(), (full, id) => {
+        const app = appById(apps, id);
+        if (!app || !app.name) return full;
+        return mentionSpan(app.name, id, forInput);
+    });
     sortedApps(apps).forEach((app) => {
-        const regex = new RegExp(`(<span[^>]*>[^<]*</span>)|@${escapeRegExp(app.name)}\\b`, "gi");
+        const regex = new RegExp(`(<span[^>]*>[^<]*</span>)|@${escapeRegExp(app.name)}(?![:\\w])`, "gi");
         escaped = escaped.replace(regex, (match, p1) => {
             if (p1) return p1;
-            return `<span style="color: #c084fc; font-weight: 600;">@${app.name}</span>`;
+            return mentionSpan(app.name, app.id, forInput);
         });
     });
     return escaped;
 }
 
+export function formatGoalText(text, apps) {
+    return formatGoalTextShared(text, apps, false);
+}
+
 export function formatGoalTextForInput(text, apps) {
-    if (!text) return "";
-    let escaped = escapeHtml(text);
-    sortedApps(apps).forEach((app) => {
-        const regex = new RegExp(`(<span[^>]*>[^<]*</span>)|@${escapeRegExp(app.name)}\\b`, "gi");
-        escaped = escaped.replace(regex, (match, p1) => {
-            if (p1) return p1;
-            return `<span style="color: #c084fc; font-weight: 600;" contenteditable="false">@${app.name}</span>`;
-        });
-    });
-    return escaped;
+    return formatGoalTextShared(text, apps, true);
+}
+
+export function goalTextMentionsApp(text, app) {
+    if (!text || !app) return false;
+    const raw = String(text);
+    if (app.id != null && app.id !== "") {
+        const token = appMentionToken(app.id);
+        if (raw.includes(token)) return true;
+    }
+    const name = (app.name || "").trim();
+    if (!name) return false;
+    const regex = new RegExp(`@${escapeRegExp(name)}(?![:\\w])`, "i");
+    return regex.test(raw);
+}
+
+export function serializeGoalEditor(root) {
+    if (!root) return "";
+    let out = "";
+    const walk = (node) => {
+        if (!node) return;
+        if (node.nodeType === 3) {
+            out += node.nodeValue || "";
+            return;
+        }
+        if (node.nodeType !== 1) return;
+        const id = typeof node.getAttribute === "function" ? node.getAttribute("data-app-id") : null;
+        if (id) {
+            out += appMentionToken(id);
+            return;
+        }
+        if (String(node.tagName || "").toUpperCase() === "BR") {
+            out += "\n";
+            return;
+        }
+        const children = node.childNodes || [];
+        for (let i = 0; i < children.length; i += 1) walk(children[i]);
+    };
+    walk(root);
+    return String(out).replace(/\u00a0/g, " ");
 }
 
 export function placeCaretAtEnd(el) {

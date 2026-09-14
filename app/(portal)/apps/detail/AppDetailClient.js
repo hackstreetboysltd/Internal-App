@@ -8,6 +8,7 @@ import { trackActivity } from "@/lib/activityTracker";
 import { isTrustedGithubMessage } from "@/lib/githubMessage";
 import { useSession, clearActiveModule } from "@/lib/session";
 import { sanitizeHtml } from "../html";
+import { formatGoalText, goalTextMentionsApp } from "../../goals/goalsHelpers";
 
 function nextItemId() {
     return nextPortalId();
@@ -120,6 +121,7 @@ export default function AppDetailClient() {
     const [tab, setTab] = useState("description");
 
     const [goals, setGoals] = useState([]);
+    const [goalApps, setGoalApps] = useState([]);
     const [goalsLoading, setGoalsLoading] = useState(false);
     const [goalsError, setGoalsError] = useState("");
 
@@ -138,8 +140,8 @@ export default function AppDetailClient() {
         setGoalsLoading(true);
         setGoalsError("");
         try {
-            const goalsData = await get("goals");
-            const appTag = `@${(currentApp.name || "").toLowerCase()}`;
+            const [goalsData, appsData] = await Promise.all([get("goals"), get("apps")]);
+            const catalog = Array.isArray(appsData) ? appsData : [];
             const matchedGoals = [];
             (Array.isArray(goalsData) ? goalsData : []).forEach((record) => {
                 let type = record.type;
@@ -153,7 +155,7 @@ export default function AppDetailClient() {
                 const resolvedPeriod = record.periodId || record.weekId || "Target";
                 if (record.goals && Array.isArray(record.goals)) {
                     record.goals.forEach((goal) => {
-                        if (goal.text && goal.text.toLowerCase().includes(appTag)) {
+                        if (goalTextMentionsApp(goal.text, currentApp)) {
                             matchedGoals.push({
                                 user: record.user,
                                 type,
@@ -166,10 +168,12 @@ export default function AppDetailClient() {
                 }
             });
             setGoals(matchedGoals);
+            setGoalApps(catalog);
         } catch (e) {
             console.error("Error fetching associated goals:", e);
             setGoalsError("Failed to load associated goals.");
             setGoals([]);
+            setGoalApps([]);
         } finally {
             setGoalsLoading(false);
         }
@@ -486,9 +490,10 @@ export default function AppDetailClient() {
                                                 return (
                                                     <li key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(0,0,0,0.15)", padding: "10px 14px", borderRadius: 8, marginBottom: 8, fontSize: "0.9rem", border: "1px solid rgba(255, 255, 255, 0.03)" }}>
                                                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                                            <span style={{ color: "#cbd5e1", textDecoration: mg.done ? "line-through" : "none", opacity: mg.done ? 0.55 : 1 }}>
-                                                                {mg.text}
-                                                            </span>
+                                                            <span
+                                                                style={{ color: "#cbd5e1", textDecoration: mg.done ? "line-through" : "none", opacity: mg.done ? 0.55 : 1 }}
+                                                                dangerouslySetInnerHTML={{ __html: formatGoalText(mg.text, goalApps) }}
+                                                            />
                                                             <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
                                                                 Committed by <strong>{mg.user}</strong> during <strong>{capitalizedType} ({mg.period})</strong>
                                                             </span>

@@ -21,9 +21,12 @@ import {
     filterMemberGoalItems,
     directoryEmails,
     formatGoalCreatedStamp,
+    displayGoalText,
+    encodeAppMentions,
     formatGoalText,
     formatGoalTextForInput,
     formatPeriodLabel,
+    serializeGoalEditor,
     getDirectoryUsers,
     getGoalCreatedTime,
     isPersonalGoalRecord,
@@ -664,13 +667,11 @@ export default function GoalsClient() {
         return apps.filter((app) => (app.name || "").toLowerCase().includes(q));
     }, [apps, tagFilter, tagSearch]);
 
-    const insertTag = (appName) => {
+    const insertTag = (app) => {
         const inputEl = editorRef.current;
-        if (!inputEl) return;
-        const val = inputEl.textContent || "";
-        const lastAtIndex = val.lastIndexOf("@");
-        let newVal = val;
-        if (lastAtIndex !== -1) newVal = val.substring(0, lastAtIndex) + `@${appName}`;
+        if (!inputEl || !app || app.id == null || app.id === "") return;
+        const serialized = serializeGoalEditor(inputEl);
+        const newVal = serialized.replace(/@[^\s]*$/, `@app:${app.id}`);
         inputEl.innerHTML = formatGoalTextForInput(newVal, appsRef.current) + "&nbsp;";
         placeCaretAtEnd(inputEl);
         hideTags();
@@ -678,7 +679,7 @@ export default function GoalsClient() {
 
     const addDraftItem = async () => {
         const input = editorRef.current;
-        const text = (input?.textContent || "").trim();
+        const text = encodeAppMentions(serializeGoalEditor(input), appsRef.current).trim();
         if (!text) return;
         if (draftItems.length >= 15) {
             await showAlert("Validation Error", "A maximum of 15 items is allowed.");
@@ -717,7 +718,7 @@ export default function GoalsClient() {
                 const matchedApp = appsRef.current.find((app) => (app.name || "").toLowerCase() === typedAppName);
                 if (matchedApp) {
                     e.preventDefault();
-                    insertTag(matchedApp.name);
+                    insertTag(matchedApp);
                 }
             }
         }
@@ -790,7 +791,9 @@ export default function GoalsClient() {
 
     const saveUnifiedGoal = () => runFormBusy(async () => {
         const currentActor = actorRef.current || { name: "", email: "" };
-        const itemsArray = draftItems.map((d) => (editingKey === d.key ? editText : d.text).trim()).filter(Boolean);
+        const itemsArray = draftItems
+            .map((d) => encodeAppMentions(editingKey === d.key ? editText : d.text, apps).trim())
+            .filter(Boolean);
         if (!isAdminView && !(currentActor.name || "")) {
             await showAlert("Authentication Error", "Your user session name could not be identified.");
             return;
@@ -1027,7 +1030,7 @@ export default function GoalsClient() {
         setNotifyTarget({
             recordId: record.id,
             goalIndex,
-            goalText: plainGoalSnippet(goal.text) || "Untitled goal",
+            goalText: plainGoalSnippet(displayGoalText(goal.text, apps)) || "Untitled goal",
             assigneeEmail,
         });
         setNotifyMessage("");
@@ -1333,7 +1336,7 @@ export default function GoalsClient() {
                             {filteredApps.length === 0
                                 ? <span style={{ fontSize: "0.75rem", color: "#6b7280", padding: "4px 8px" }}>No apps found</span>
                                 : filteredApps.map((app) => (
-                                    <div key={app.id || app.name} className="app-tag-item" onClick={(e) => { e.stopPropagation(); insertTag(app.name); }}>{app.name}</div>
+                                    <div key={app.id || app.name} className="app-tag-item" onClick={(e) => { e.stopPropagation(); insertTag(app); }}>{app.name}</div>
                                 ))}
                         </div>
                     </div>
@@ -1379,7 +1382,7 @@ export default function GoalsClient() {
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                     e.preventDefault();
-                                    setDraftItems((prev) => prev.map((d) => d.key === item.key ? { ...d, text: editText.trim() || d.text } : d));
+                                    setDraftItems((prev) => prev.map((d) => d.key === item.key ? { ...d, text: encodeAppMentions(editText.trim(), apps) || d.text } : d));
                                     setEditingKey(null);
                                 }
                             }}
@@ -1393,7 +1396,7 @@ export default function GoalsClient() {
                                 type="button"
                                 className="goal-btn"
                                 onClick={() => {
-                                    setDraftItems((prev) => prev.map((d) => d.key === item.key ? { ...d, text: editText.trim() || d.text } : d));
+                                    setDraftItems((prev) => prev.map((d) => d.key === item.key ? { ...d, text: encodeAppMentions(editText.trim(), apps) || d.text } : d));
                                     setEditingKey(null);
                                 }}
                             >
@@ -1405,7 +1408,7 @@ export default function GoalsClient() {
                                 className="goal-btn"
                                 onClick={() => {
                                     setEditingKey(item.key);
-                                    setEditText(item.text);
+                                    setEditText(displayGoalText(item.text, apps));
                                 }}
                             >
                                 <i className="fa-solid fa-pen"></i>
@@ -1641,6 +1644,7 @@ export default function GoalsClient() {
                     editText={editText}
                     goalEditor={mentionsBlock}
                     draftList={draftList}
+                    apps={apps}
                     isAdminView={isAdminView}
                     scope={scope}
                     setScope={setScope}
