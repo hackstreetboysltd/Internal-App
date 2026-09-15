@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { apiPath } from "@/lib/apiPath";
@@ -436,6 +437,7 @@ export default function GoalsClient() {
     const [tagOpen, setTagOpen] = useState(false);
     const [tagFilter, setTagFilter] = useState("");
     const [tagSearch, setTagSearch] = useState("");
+    const [tagMenuRect, setTagMenuRect] = useState(null);
     const [appsWatchForced, setAppsWatchForced] = useState(false);
     const appsWatchActive = appsWatchForced || tagOpen || records.some((record) => {
         if (record.title && record.title.includes("@")) return true;
@@ -672,6 +674,38 @@ export default function GoalsClient() {
         const q = (tagSearch || tagFilter || "").toLowerCase();
         return apps.filter((app) => (app.name || "").toLowerCase().includes(q));
     }, [apps, tagFilter, tagSearch]);
+
+    useLayoutEffect(() => {
+        if (!tagOpen) {
+            setTagMenuRect(null);
+            return undefined;
+        }
+        const sync = () => {
+            const el = editorRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const menuHeight = Math.min(188, 52 + Math.max(1, filteredApps.length) * 34);
+            const gap = 4;
+            const viewportPad = 8;
+            let top = rect.bottom + gap;
+            if (top + menuHeight > window.innerHeight - viewportPad) {
+                top = Math.max(viewportPad, rect.top - menuHeight - gap);
+            }
+            const width = Math.max(rect.width, 220);
+            let left = rect.left;
+            if (left + width > window.innerWidth - viewportPad) {
+                left = Math.max(viewportPad, window.innerWidth - width - viewportPad);
+            }
+            setTagMenuRect({ top, left, width });
+        };
+        sync();
+        window.addEventListener("resize", sync);
+        window.addEventListener("scroll", sync, true);
+        return () => {
+            window.removeEventListener("resize", sync);
+            window.removeEventListener("scroll", sync, true);
+        };
+    }, [tagOpen, tagSearch, filteredApps.length]);
 
     const insertTag = (app) => {
         const inputEl = editorRef.current;
@@ -1328,25 +1362,31 @@ export default function GoalsClient() {
                     onInput={onEditorInput}
                     onKeyDown={onEditorKeyDown}
                 />
-                {tagOpen && (
-                    <div style={{ display: "block", position: "absolute", top: "100%", left: 0, width: "100%", background: "#1e293b", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, zIndex: 10001, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.5)", padding: 8, boxSizing: "border-box", marginTop: 4 }}>
-                        <input
-                            type="text"
-                            placeholder="Filter applications..."
-                            autoComplete="off"
-                            value={tagSearch}
-                            onChange={(e) => setTagSearch(e.target.value)}
-                            style={{ padding: "6px 10px", fontSize: "0.8rem", background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", color: "white", marginBottom: 6, borderRadius: 4, boxSizing: "border-box", width: "100%" }}
-                        />
-                        <div style={{ maxHeight: 112, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
-                            {filteredApps.length === 0
-                                ? <span style={{ fontSize: "0.75rem", color: "#6b7280", padding: "4px 8px" }}>No apps found</span>
-                                : filteredApps.map((app) => (
-                                    <div key={app.id || app.name} className="app-tag-item" onClick={(e) => { e.stopPropagation(); insertTag(app); }}>{app.name}</div>
-                                ))}
-                        </div>
-                    </div>
-                )}
+                {tagOpen && tagMenuRect && typeof document !== "undefined"
+                    ? createPortal(
+                        <div
+                            className="goal-app-tag-dropdown"
+                            style={{ top: tagMenuRect.top, left: tagMenuRect.left, width: tagMenuRect.width }}
+                        >
+                            <input
+                                type="text"
+                                placeholder="Filter applications..."
+                                autoComplete="off"
+                                value={tagSearch}
+                                onChange={(e) => setTagSearch(e.target.value)}
+                                style={{ padding: "6px 10px", fontSize: "0.8rem", background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", color: "white", marginBottom: 6, borderRadius: 4, boxSizing: "border-box", width: "100%" }}
+                            />
+                            <div style={{ maxHeight: 112, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                                {filteredApps.length === 0
+                                    ? <span style={{ fontSize: "0.75rem", color: "#6b7280", padding: "4px 8px" }}>No apps found</span>
+                                    : filteredApps.map((app) => (
+                                        <div key={app.id || app.name} className="app-tag-item" onClick={(e) => { e.stopPropagation(); insertTag(app); }}>{app.name}</div>
+                                    ))}
+                            </div>
+                        </div>,
+                        document.body,
+                    )
+                    : null}
             </div>
             <button
                 type="button"

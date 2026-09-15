@@ -1001,7 +1001,8 @@
     transform: none;
 }
 
-.goals-module .app-tag-item {
+.goals-module .app-tag-item,
+.goal-app-tag-dropdown .app-tag-item {
     padding: 6px 10px;
     font-size: 0.85rem;
     color: #cbd5e1;
@@ -1014,9 +1015,21 @@
     align-items: center;
 }
 
-.goals-module .app-tag-item:hover {
+.goals-module .app-tag-item:hover,
+.goal-app-tag-dropdown .app-tag-item:hover {
     background: rgba(251, 113, 133, 0.12);
     color: white;
+}
+
+.goal-app-tag-dropdown {
+    position: fixed;
+    z-index: 10050;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    box-sizing: border-box;
 }
 
 .goals-module .rte-input {
