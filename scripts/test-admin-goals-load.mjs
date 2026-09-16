@@ -31,6 +31,8 @@ assert.doesNotMatch(
 );
 
 assert.match(dataApi, /Always seed the local cache with the saved payload/);
-assert.match(goalsClient, /\}, \[watchEpoch\]\);/);
+assert.match(goalsClient, /\}, \[watchEpoch, canSync\]\);/);
+assert.match(goalsClient, /if \(!canSync\) return undefined;/);
+assert.match(dataApi, /if \(isAuthError\(err\)\) return;/);
 
 console.log("ok — admin fast-load guards in place");

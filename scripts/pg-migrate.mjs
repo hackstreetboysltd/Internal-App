@@ -5,6 +5,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { normalizeDatabaseUrl } from "../lib/server/databaseUrl.mjs";
 
 function loadEnvFile(path) {
   try {
@@ -35,6 +36,7 @@ loadEnvFile(fileURLToPath(new URL("../.env.neon", import.meta.url)));
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = "postgresql://portal:portal@localhost:5432/portal";
 }
+process.env.DATABASE_URL = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 const bin = fileURLToPath(new URL("../node_modules/node-pg-migrate/bin/node-pg-migrate.js", import.meta.url));
 const child = spawn(process.execPath, [bin, ...process.argv.slice(2)], {

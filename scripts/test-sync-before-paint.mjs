@@ -14,6 +14,7 @@ const documentsClient = readFileSync(join(root, "app/(portal)/documents/Document
 
 const watchBlock = dataApi.match(/export function watchCollection[\s\S]*?^}/m)?.[0] || "";
 assert.match(watchBlock, /cacheFirst: false/);
+assert.match(watchBlock, /isAuthError\(err\)/);
 // Must not paint warm cache before the sync fetch starts (error fallback emit is ok).
 assert.match(
   watchBlock,

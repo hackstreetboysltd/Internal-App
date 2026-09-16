@@ -8,6 +8,7 @@ import dns from "node:dns";
 import pg from "pg";
 import { parse } from "pg-connection-string";
 import Redis from "ioredis";
+import { normalizeDatabaseUrl } from "../lib/server/databaseUrl.mjs";
 
 dns.setDefaultResultOrder("ipv4first");
 if (process.env.NODE_ENV !== "production") {
@@ -46,7 +47,7 @@ async function neonPoolConfig(databaseUrl) {
 }
 
 const env = loadEnvLocal();
-const databaseUrl = env.DATABASE_URL;
+const databaseUrl = normalizeDatabaseUrl(env.DATABASE_URL);
 const redisUrl = env.REDIS_URL;
 
 if (!databaseUrl) {

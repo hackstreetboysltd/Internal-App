@@ -11,14 +11,15 @@ const PortalDataContext = createContext(null);
 
 export function PortalDataProvider({ children }) {
     const router = useRouter();
-    const { session, isAdminView } = useSession();
+    const { session, isAdminView, ready } = useSession();
     const [roleAccess, setRoleAccess] = useState([]);
 
     useEffect(() => {
+        if (!ready || !session) return undefined;
         return watch("role_access", (data) => {
             setRoleAccess(Array.isArray(data) ? data : []);
         }, { admin: false });
-    }, []);
+    }, [ready, session]);
 
     const allowedEmails = useMemo(
         () => allowedEmailsFromRoleAccess(roleAccess),

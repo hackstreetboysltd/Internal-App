@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { apiPath } from "@/lib/apiPath";
-import { useSession, clearActiveModule, getSessionActor, waitForSessionReady, loadSessionUser } from "@/lib/session";
+import { useSession, clearActiveModule, waitForSessionReady, loadSessionUser } from "@/lib/session";
 import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -260,7 +260,7 @@ function MemberGoalDetailsPage({
                             >
                                 {members.map((member) => (
                                     <option key={member.email} value={member.email}>
-                                        {member.name} — {member.email}
+                                        {member.name}
                                     </option>
                                 ))}
                             </select>
@@ -316,7 +316,6 @@ function MemberGoalDetailsPage({
                                                 onClick={() => { onSelect(idx); onMode("one"); }}
                                             >
                                                 <span className="goal-details-name">{member.name}</span>
-                                                <span className="goal-details-email">{member.email}</span>
                                             </button>
                                         </th>
                                         <td>{member.set}</td>
@@ -410,7 +409,8 @@ function WorkspaceSkeleton() {
 export default function GoalsClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { actor, isAdminView } = useSession();
+    const { actor, isAdminView, ready, session } = useSession();
+    const canSync = ready && !!session;
     const { allowedEmails } = usePortalData();
     const actorRef = useRef(actor);
     useEffect(() => { actorRef.current = actor; }, [actor]);
@@ -430,7 +430,6 @@ export default function GoalsClient() {
     const watchEpoch = searchParams.toString();
 
     const [loadedEpoch, setLoadedEpoch] = useState(null);
-    const loading = loadedEpoch !== watchEpoch;
     const [records, setRecords] = useState([]);
     const [users, setUsers] = useState([]);
     const [apps, setApps] = useState([]);
@@ -447,10 +446,7 @@ export default function GoalsClient() {
 
     const [searchQuery, setSearchQuery] = useState("");
     const [timeframe, setTimeframe] = useState("all");
-    const [memberFilter, setMemberFilter] = useState(() => {
-        const email = (getSessionActor().email || "").trim().toLowerCase();
-        return email || "all";
-    });
+    const [memberFilter, setMemberFilter] = useState("all");
     const userSetMemberFilter = useRef(false);
     const [sortDir, setSortDir] = useState("desc");
     const [workspacePage, setWorkspacePage] = useState(1);
@@ -536,21 +532,22 @@ export default function GoalsClient() {
             setUsers(nextUsers);
             setLoadedEpoch((prev) => prev ?? watchEpoch);
         } catch (e) {
-            console.error("Error fetching workspace goals:", e);
+            if (e && e.status !== 401) console.error("Error fetching workspace goals:", e);
             setRecords([]);
         }
     }, [watchEpoch]);
 
     useEffect(() => {
-        if (!appsWatchActive) return undefined;
+        if (!canSync || !appsWatchActive) return undefined;
         return watch("apps", (d) => {
             const nextApps = Array.isArray(d) ? d.slice() : [];
             nextApps.sort((a, b) => (b.name || "").length - (a.name || "").length);
             setApps(nextApps);
         }, { onError: () => setApps([]) });
-    }, [appsWatchActive]);
+    }, [appsWatchActive, canSync]);
 
     useEffect(() => {
+        if (!canSync) return undefined;
         let cancelled = false;
         const seen = new Set();
         const mark = (key) => {
@@ -564,7 +561,11 @@ export default function GoalsClient() {
             watch("goals", (d) => {
                 setRecords(Array.isArray(d) ? d : []);
                 mark("goals");
-            }, { onError: (e) => { console.error("Error fetching workspace goals:", e); setRecords([]); mark("goals"); } }),
+            }, { onError: (e) => {
+                if (e && e.status !== 401) console.error("Error fetching workspace goals:", e);
+                setRecords([]);
+                mark("goals");
+            } }),
             // Profiles are not pending-merged; force the live collection path.
             watch("profile", (d) => {
                 setUsers(Array.isArray(d) ? d : []);
@@ -583,7 +584,7 @@ export default function GoalsClient() {
             clearTimeout(timeoutId);
             unsubs.forEach((u) => u());
         };
-    }, [watchEpoch]);
+    }, [watchEpoch, canSync]);
 
     const persistGoals = useCallback(async (list, { skipReload } = {}) => {
         try {
@@ -648,7 +649,8 @@ export default function GoalsClient() {
             { value: "all", label: "All users" },
             ...teammates.map((p) => {
                 const email = p.email.trim().toLowerCase();
-                return { value: email, label: email };
+                const name = (p.name || "").trim();
+                return { value: email, label: name || email };
             }),
         ];
     }, [directory]);
@@ -656,17 +658,14 @@ export default function GoalsClient() {
     useEffect(() => {
         if (userSetMemberFilter.current || memberFilter !== "all") return;
         const email = (actor.email || "").trim().toLowerCase();
-        if (!email || !memberOptions.some((o) => o.value === email)) return;
+        if (!email) return;
         setMemberFilter(email);
-    }, [actor.email, memberFilter, memberOptions]);
+    }, [actor.email, memberFilter]);
 
-    useEffect(() => {
-        if (memberFilter === "all" || memberOptions.some((o) => o.value === memberFilter)) return;
-        const selfEmail = (actor.email || "").trim().toLowerCase();
-        if (memberFilter === selfEmail && selfEmail) return;
-        const t = setTimeout(() => setMemberFilter("all"), 0);
-        return () => clearTimeout(t);
-    }, [memberFilter, memberOptions, actor.email]);
+    const awaitingSelfFilter = !userSetMemberFilter.current
+        && !!(actor.email || "").trim()
+        && memberFilter === "all";
+    const loading = loadedEpoch !== watchEpoch || awaitingSelfFilter;
 
     const horizonOptions = HORIZON_OPTIONS.filter((o) => o.value !== "all");
 
@@ -1562,7 +1561,10 @@ export default function GoalsClient() {
                                 const reviewStatus = resolveGoalReviewStatus(g);
                                 const selfEmail = (actor.email || "").trim().toLowerCase();
                                 const normalizedRecordEmail = (recordEmail || "").trim().toLowerCase();
-                                const showAssignee = normalizedRecordEmail && normalizedRecordEmail !== selfEmail;
+                                const showAssignee = memberFilter === "all" && normalizedRecordEmail && normalizedRecordEmail !== selfEmail;
+                                const assigneeName = showAssignee
+                                    ? (profileNameForEmail(users, recordEmail) || recordEmail)
+                                    : "";
                                 return (
                                     <div key={`${record.id}-${g.index}`} className={`workspace-goal-row${showActions ? " has-visible-actions" : ""}`}>
                                         <input
@@ -1586,7 +1588,7 @@ export default function GoalsClient() {
                                                     {showAssignee ? (
                                                         <>
                                                             <span className="workspace-goal-meta-sep" aria-hidden="true">•</span>
-                                                            <span className="workspace-goal-assignee">{recordEmail || "Unknown"}</span>
+                                                            <span className="workspace-goal-assignee">{assigneeName || "Unknown"}</span>
                                                         </>
                                                     ) : null}
                                                 </span>
