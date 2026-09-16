@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/apiPath";
-import { MOBILE_HOME_PATH, isMobileViewport } from "@/lib/viewport";
 import "./login.css";
 
 const GOOGLE_BTN_LABEL = (
@@ -35,9 +34,6 @@ function getOrCreateTabSessionId() {
 }
 
 function defaultReturnTo() {
-    if (typeof window !== "undefined" && isMobileViewport()) {
-        return MOBILE_HOME_PATH;
-    }
     return "/";
 }
 

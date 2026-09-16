@@ -50,7 +50,7 @@ import {
     persistableCollection,
     sameId,
 } from "./messagesHelpers";
-import { isMessagesNarrowViewport, markStayOnDashboard } from "@/lib/viewport";
+import { isMessagesNarrowViewport } from "@/lib/viewport";
 
 const ACCENT = "#9b87ff";
 
@@ -832,7 +832,6 @@ export default function MessagesClient() {
     };
     const closeModule = () => {
         clearActiveModule();
-        markStayOnDashboard();
         router.push("/");
     };
 
