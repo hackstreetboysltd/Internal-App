@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
     buildMemberGoalDetails,
     filterMemberGoalItems,
+    getDirectoryUsers,
     isApprovedMember,
     listApprovedMembers,
     summarizeMemberGoals,
@@ -93,5 +94,15 @@ assert.equal(filterMemberGoalItems(ann.items, "all").length, 3);
 assert.deepEqual(filterMemberGoalItems(ann.items, "completed").map((item) => item.text).sort(), ["one", "year"]);
 assert.deepEqual(filterMemberGoalItems(ann.items, "open").map((item) => item.text), ["two"]);
 assert.deepEqual(filterMemberGoalItems(null, "completed"), []);
+
+const directory = getDirectoryUsers([
+    { email: "ann@x.com", name: "Ann", approvedStatus: "approved" },
+    { email: "wait@x.com", name: "Wait", approvedStatus: "pending" },
+    { email: "no@x.com", name: "No", approvedStatus: "rejected" },
+    { email: "out@x.com", name: "Out", approvedStatus: "approved" },
+    { email: "skip@x.com", name: "Skip" },
+], ["ann@x.com", "wait@x.com", "no@x.com", "skip@x.com"]);
+assert.deepEqual(directory.map((m) => m.email), ["ann@x.com", "skip@x.com"]);
+console.log("ok: directory dropdowns exclude pending, rejected, and off-list profiles");
 
 console.log("ok — member goal details summaries");

@@ -136,10 +136,12 @@ export default function CreateGoalFlow({
                     onChange={(e) => setAssigneeEmail(e.target.value)}
                   >
                     {assigneeOptions.length === 0
-                      ? <option value="">No users loaded</option>
-                      : assigneeOptions.map((email) => (
-                        <option key={email} value={email}>{email}</option>
-                      ))}
+                      ? <option value="">No active members</option>
+                      : assigneeOptions.map((opt) => {
+                        const value = typeof opt === "string" ? opt : opt.value;
+                        const label = typeof opt === "string" ? opt : (opt.label || opt.value);
+                        return <option key={value} value={value}>{label}</option>;
+                      })}
                   </select>
                 </CreateReviewField>
               ) : null}
@@ -163,7 +165,10 @@ export default function CreateGoalFlow({
             <>
               <CreateReviewRow label="Scope" value={scope === "global" ? "Global" : "Personal"} />
               {scope === "personal" ? (
-                <CreateReviewRow label="Assignee" value={assigneeEmail || "—"} />
+                <CreateReviewRow
+                  label="Assignee"
+                  value={(assigneeOptions || []).find((opt) => (typeof opt === "string" ? opt : opt.value) === assigneeEmail)?.label || assigneeEmail || "—"}
+                />
               ) : null}
             </>
           ) : null}

@@ -1,6 +1,7 @@
 'use client';
 
 import { formatPortalCreatedStamp, nextPortalId, portalDateParts } from "@/lib/portalTime";
+import { listApprovedMembers } from "@/lib/roleAccess";
 
 export const HORIZONS = ["annual", "quarterly", "monthly", "weekly", "daily"];
 export const HORIZON_OPTIONS = [
@@ -171,13 +172,7 @@ export function appMentionToken(id) {
     return `@app:${id}`;
 }
 
-export function displayGoalText(text, apps) {
-    if (!text) return "";
-    return String(text).replace(appMentionRegex(), (full, id) => {
-        const app = appById(apps, id);
-        return app && app.name ? `@${app.name}` : full;
-    });
-}
+export { displayGoalText } from "@/lib/goalAppMentions";
 
 export function encodeAppMentions(text, apps) {
     let out = String(text || "");
@@ -266,11 +261,10 @@ export function placeCaretAtEnd(el) {
     sel.addRange(range);
 }
 
-export { allowedEmailsFromRoleAccess } from "@/lib/roleAccess";
+export { allowedEmailsFromRoleAccess, isApprovedMember, listApprovedMembers } from "@/lib/roleAccess";
 
 export function getDirectoryUsers(users, allowedEmails) {
-    const normalizedAllowed = (allowedEmails || []).map((e) => (e || "").trim().toLowerCase());
-    return (users || []).filter((u) => u.email && normalizedAllowed.includes(u.email.trim().toLowerCase()));
+    return listApprovedMembers(users, allowedEmails);
 }
 
 export function directoryEmails(users) {
@@ -305,35 +299,70 @@ export function cloneRecords(list) {
     }));
 }
 
-/**
- * Portal-approved teammate: not pending/rejected, and on the allowed list when one exists.
- * @param {{ email?: string, approvedStatus?: string } | null | undefined} user
- * @param {string[] | null | undefined} allowedEmails
- */
-export function isApprovedMember(user, allowedEmails) {
-    const email = (user && user.email ? String(user.email) : "").trim().toLowerCase();
-    if (!email) return false;
-    const status = String((user && user.approvedStatus) || "").toLowerCase();
-    if (status === "rejected" || status === "pending") return false;
-    const allowed = (allowedEmails || [])
-        .map((e) => (e || "").trim().toLowerCase())
-        .filter(Boolean);
-    if (allowed.length > 0) return allowed.includes(email);
-    return status === "approved";
+function assignGoalOwner(record, { toEmail, toName, actor }) {
+    record.user = toName;
+    record.email = toEmail;
+    record.assignedByAdmin = true;
+    record.createdBy = actor && actor.name ? String(actor.name) : "";
+    record.createdByEmail = actor && actor.email ? String(actor.email).trim().toLowerCase() : "";
+    record.scope = "personal";
 }
 
 /**
- * @param {Array<{ email?: string, name?: string, approvedStatus?: string }>} users
- * @param {string[] | null | undefined} allowedEmails
+ * Move one personal goal item to another user. Single-item records change
+ * owner in place; multi-item records split the selected item onto a new row.
+ *
+ * @param {object[]} records cloned goal records (mutated)
+ * @param {{ recordId: unknown, goalIndex?: number, toEmail: string, users?: unknown[], actor?: { name?: string, email?: string }, nextId?: () => unknown }} options
+ * @returns {{ ok: true, records: object[], splitId?: unknown } | { ok: false, error: string }}
  */
-export function listApprovedMembers(users, allowedEmails) {
-    return (users || [])
-        .filter((user) => isApprovedMember(user, allowedEmails))
-        .sort((a, b) => {
-            const an = ((a.name || "").trim() || a.email || "");
-            const bn = ((b.name || "").trim() || b.email || "");
-            return an.localeCompare(bn, undefined, { sensitivity: "base" });
-        });
+export function applyGoalReassignment(records, options) {
+    const toEmail = String((options && options.toEmail) || "").trim().toLowerCase();
+    if (!toEmail) {
+        return { ok: false, error: "Please select a user to reassign to." };
+    }
+    const record = (records || []).find((row) => sameId(row.id, options.recordId));
+    if (!record) {
+        return { ok: false, error: "Goal record not found." };
+    }
+    if (!isPersonalGoalRecord(record)) {
+        return { ok: false, error: "Only personal goals can be reassigned." };
+    }
+    const goals = Array.isArray(record.goals) ? record.goals : [];
+    const idx = Number.isInteger(options.goalIndex) ? options.goalIndex : 0;
+    if (!goals[idx]) {
+        return { ok: false, error: "Goal item not found." };
+    }
+    const current = ((record.email || "").trim().toLowerCase());
+    if (current === toEmail) {
+        return { ok: false, error: "This goal is already assigned to that user." };
+    }
+    const actor = (options && options.actor) || {};
+    const toName = profileNameForEmail(options.users, toEmail) || toEmail;
+    const owner = { toEmail, toName, actor };
+    if (goals.length <= 1) {
+        assignGoalOwner(record, owner);
+        return { ok: true, records };
+    }
+    const [moved] = goals.splice(idx, 1);
+    record.goals = goals;
+    const nextId = typeof options.nextId === "function" ? options.nextId : nextItemId;
+    const id = nextId();
+    const numericId = Number(id);
+    const created = {
+        id,
+        createdAt: new Date(Number.isFinite(numericId) ? numericId : Date.now()).toISOString(),
+        goals: [moved],
+        weekId: record.weekId == null ? null : record.weekId,
+        periodId: record.periodId == null ? null : record.periodId,
+        type: resolveGoalType(record),
+    };
+    assignGoalOwner(created, owner);
+    created.reassignedByAdmin = true;
+    created.reassignedFromUser = record.user;
+    created.reassignedFromEmail = current;
+    records.push(created);
+    return { ok: true, records, splitId: id };
 }
 
 function emptyHorizonStats() {

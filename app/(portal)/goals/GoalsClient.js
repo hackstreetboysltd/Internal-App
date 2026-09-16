@@ -31,6 +31,7 @@ import {
     getDirectoryUsers,
     getGoalCreatedTime,
     isPersonalGoalRecord,
+    applyGoalReassignment,
     itemsLabelForType,
     nextDraftKey,
     nextItemId,
@@ -476,6 +477,7 @@ export default function GoalsClient() {
     const [reassignOpen, setReassignOpen] = useState(false);
     const [reassignShown, setReassignShown] = useState(false);
     const [reassigningId, setReassigningId] = useState(null);
+    const [reassigningGoalIndex, setReassigningGoalIndex] = useState(0);
     const [reassignFrom, setReassignFrom] = useState("");
     const [reassignTo, setReassignTo] = useState("");
     const [notifyOpen, setNotifyOpen] = useState(false);
@@ -637,6 +639,7 @@ export default function GoalsClient() {
     };
 
     const directory = useMemo(() => getDirectoryUsers(users, allowedEmails), [users, allowedEmails]);
+    const activeEmails = useMemo(() => directoryEmails(directory), [directory]);
     const memberGoalDetails = useMemo(
         () => buildMemberGoalDetails(users, allowedEmails, records, goalEmail),
         [users, allowedEmails, records, goalEmail],
@@ -774,7 +777,7 @@ export default function GoalsClient() {
         setCurrentTab(nextHorizon);
         if (isAdminView) {
             setScope("personal");
-            const emails = directoryEmails(users);
+            const emails = activeEmails;
             const filteredEmail = memberFilter !== "all" ? memberFilter : "";
             setAssigneeEmail(filteredEmail && emails.includes(filteredEmail) ? filteredEmail : (emails[0] || ""));
         }
@@ -900,6 +903,10 @@ export default function GoalsClient() {
                     return;
                 }
                 const selectedEmail = assigneeEmail.trim().toLowerCase();
+                if (!activeEmails.includes(selectedEmail)) {
+                    await showAlert("Validation Error", "Please assign the goal to an active team member.");
+                    return;
+                }
                 const selectedUser = users.find((u) => (u.email || "").trim().toLowerCase() === selectedEmail);
                 targetUser = selectedUser ? ((selectedUser.name || "").trim() || selectedEmail) : (profileNameForEmail(users, selectedEmail) || selectedEmail);
                 targetEmail = selectedEmail;
@@ -1195,21 +1202,37 @@ export default function GoalsClient() {
     const wsStart = (wsPage - 1) * WORKSPACE_ITEMS_PER_PAGE;
     const pageRows = workspaceRows.slice(wsStart, wsStart + WORKSPACE_ITEMS_PER_PAGE);
 
-    const openReassign = (recordId) => {
+    const resetReassign = () => {
+        setReassigningId(null);
+        setReassigningGoalIndex(0);
+        setReassignFrom("");
+        setReassignTo("");
+    };
+
+    const closeReassign = () => closeModal(setReassignOpen, setReassignShown, resetReassign);
+
+    const openReassign = useCallback((recordId, goalIndex = 0) => {
         const id = recordId || null;
-        setReassigningId(id);
         const data = records;
-        const emails = directoryEmails(users);
+        const emails = activeEmails;
         if (id) {
             const record = data.find((r) => sameId(r.id, id));
             if (!record) {
                 showAlert("Error", "Goal record not found.");
                 return;
             }
+            if (!isPersonalGoalRecord(record)) {
+                showAlert("Error", "Only personal goals can be reassigned.");
+                return;
+            }
             const current = goalEmail(record);
+            setReassigningId(id);
+            setReassigningGoalIndex(Number.isInteger(goalIndex) ? goalIndex : 0);
             setReassignFrom(current || "");
-            setReassignTo(emails.find((e) => e !== current) || emails[0] || "");
+            setReassignTo(emails.find((e) => e !== current) || "");
         } else {
+            setReassigningId(null);
+            setReassigningGoalIndex(0);
             const fromEmails = [...new Set([
                 ...emails,
                 ...data.filter(isPersonalGoalRecord).map((r) => goalEmail(r)).filter(Boolean),
@@ -1218,7 +1241,7 @@ export default function GoalsClient() {
             setReassignTo(emails[0] || "");
         }
         openModal(setReassignOpen, setReassignShown);
-    };
+    }, [activeEmails, goalEmail, records, showAlert, users]);
 
     const reassignPreview = (() => {
         const toEmail = (reassignTo || "").trim().toLowerCase();
@@ -1248,19 +1271,33 @@ export default function GoalsClient() {
             await showAlert("Validation Error", "Please select a user to reassign to.");
             return;
         }
+        if (!activeEmails.includes(toEmail)) {
+            await showAlert("Validation Error", "Please reassign the goal to an active team member.");
+            return;
+        }
         const data = cloneRecords(records);
         let targets = [];
         if (reassigningId) {
-            const record = data.find((r) => sameId(r.id, reassigningId));
-            if (!record) {
-                await showAlert("Error", "Goal record not found.");
+            const result = applyGoalReassignment(data, {
+                recordId: reassigningId,
+                goalIndex: reassigningGoalIndex,
+                toEmail,
+                users,
+                actor: currentActor,
+            });
+            if (!result.ok) {
+                await showAlert("Validation Error", result.error);
                 return;
             }
-            if (goalEmail(record) === toEmail) {
-                await showAlert("Validation Error", "This goal is already assigned to that user.");
-                return;
-            }
-            targets = [record];
+            const confirmed = await showConfirm(
+                "Confirm Reassign",
+                `Reassign this goal to ${toEmail}?`
+            );
+            if (!confirmed) return;
+            const saved = await persistGoals(result.records);
+            if (!saved) return;
+            closeReassign();
+            return;
         } else {
             if (!fromEmail) {
                 await showAlert("Validation Error", "Please select the user to reassign from.");
@@ -1293,14 +1330,19 @@ export default function GoalsClient() {
         });
         const saved = await persistGoals(data);
         if (!saved) return;
-        closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null));
+        closeReassign();
     });
 
     const assigneeOptions = useMemo(() => {
-        const emails = directoryEmails(users);
+        const emails = activeEmails.slice();
         if (assigneeEmail && !emails.includes(assigneeEmail)) emails.push(assigneeEmail);
-        return [...new Set(emails)].sort((a, b) => a.localeCompare(b));
-    }, [users, assigneeEmail]);
+        return [...new Set(emails)]
+            .sort((a, b) => a.localeCompare(b))
+            .map((email) => ({
+                value: email,
+                label: profileNameForEmail(users, email) || email,
+            }));
+    }, [activeEmails, assigneeEmail, users]);
 
     const reassignFromOptions = useMemo(() => {
         if (reassigningId) {
@@ -1308,13 +1350,19 @@ export default function GoalsClient() {
             const current = record ? goalEmail(record) : "";
             return current ? [current] : [];
         }
-        return [...new Set([
-            ...directoryEmails(users),
-            ...records.filter(isPersonalGoalRecord).map((r) => goalEmail(r)).filter(Boolean),
-        ])].sort((a, b) => a.localeCompare(b));
-    }, [reassigningId, records, users, goalEmail]);
+        return activeEmails.slice().sort((a, b) => a.localeCompare(b));
+    }, [reassigningId, records, activeEmails, goalEmail]);
 
-    const reassignToOptions = useMemo(() => directoryEmails(users).sort((a, b) => a.localeCompare(b)), [users]);
+    const reassignToOptions = useMemo(() => {
+        const from = (reassignFrom || "").trim().toLowerCase();
+        return activeEmails
+            .filter((email) => email !== from)
+            .sort((a, b) => a.localeCompare(b))
+            .map((email) => ({
+                value: email,
+                label: profileNameForEmail(users, email) || email,
+            }));
+    }, [reassignFrom, activeEmails, users]);
 
     const unifiedTitle = editingId ? "Edit Goal" : "New Goal";
     const saveBtnLabel = editingId ? "Save Changes" : "Commit Goal";
@@ -1328,20 +1376,24 @@ export default function GoalsClient() {
                     { label: "Reject", onClick: () => rejectPending(record.pendingId), danger: true },
                 ];
             }
+            const items = [];
+            if (isPersonalGoalRecord(record)) {
+                items.push({ label: "Reassign", onClick: () => openReassign(record.id, goalIndex) });
+            }
             if (resolveGoalReviewStatus(goal) === GOAL_REVIEW_UNDER) {
-                return [{ label: "Mark Reviewed", onClick: () => markGoalReviewed(record.id, goalIndex) }];
+                items.push({ label: "Mark Reviewed", onClick: () => markGoalReviewed(record.id, goalIndex) });
             }
             if (resolveGoalReviewStatus(goal) === GOAL_REVIEW_NOT_DONE) {
-                return [{ label: "Notify User", onClick: () => openNotifyUser(record, goalIndex) }];
+                items.push({ label: "Notify User", onClick: () => openNotifyUser(record, goalIndex) });
             }
-            return [];
+            return items;
         }
         if (!actorOwns(record)) return [];
         return [
             { label: "Edit", onClick: () => openUnifiedEdit(record.id, goalIndex) },
             { label: "Delete", onClick: () => deleteWorkspaceGoal(record.id, goalIndex), danger: true },
         ];
-    }, [actorOwns, deleteWorkspaceGoal, isAdminView, openUnifiedEdit, showAlert, goalEmail]);
+    }, [actorOwns, deleteWorkspaceGoal, isAdminView, openReassign, openUnifiedEdit]);
 
     const renderedRows = pageRows.map((row) => {
         const menuItems = buildGoalMenuItems(row.record, row.goal.index, row.goal);
@@ -1669,7 +1721,7 @@ export default function GoalsClient() {
                                         <select id="assigneeSelect" value={assigneeEmail} onChange={(e) => setAssigneeEmail(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.1)", color: "white", borderRadius: 4, width: "100%" }}>
                                             {assigneeOptions.length === 0
                                                 ? <option value="">No users loaded</option>
-                                                : assigneeOptions.map((email) => <option key={email} value={email}>{email}</option>)}
+                                                : assigneeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                         </select>
                                     </div>
                                 )}
@@ -1708,11 +1760,11 @@ export default function GoalsClient() {
 
             {validationModal}
 
-            <ModuleModal open={reassignOpen} shown={reassignShown} onBackdrop={() => closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null))}>
+            <ModuleModal open={reassignOpen} shown={reassignShown} onBackdrop={closeReassign}>
                 <div className="modal-content admin-modal" style={{ maxWidth: 420 }}>
                     <div className="modal-header">
                         <h3 style={{ margin: "0 auto", color: ACCENT }}>{reassigningId ? "Reassign Goal" : "Reassign Goals"}</h3>
-                        <span className="close-btn" onClick={() => closeModal(setReassignOpen, setReassignShown, () => setReassigningId(null))}>&times;</span>
+                        <span className="close-btn" onClick={closeReassign}>&times;</span>
                     </div>
                     <div className="modal-body">
                         {!reassigningId && (
@@ -1724,11 +1776,11 @@ export default function GoalsClient() {
                             </div>
                         )}
                         <div style={{ marginBottom: 14 }}>
-                            <label htmlFor="reassignToSelect" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>To</label>
+                            <label htmlFor="reassignToSelect" style={{ fontSize: "0.85rem", color: "#9ca3af", display: "block", marginBottom: 6 }}>New user</label>
                             <select id="reassignToSelect" value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} style={{ padding: "8px 12px", fontSize: "0.85rem", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.1)", color: "white", borderRadius: 4, width: "100%" }}>
                                 {reassignToOptions.length === 0
-                                    ? <option value="">No users loaded</option>
-                                    : reassignToOptions.map((email) => <option key={email} value={email}>{email}</option>)}
+                                    ? <option value="">No other users loaded</option>
+                                    : reassignToOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                         </div>
                         <p style={{ fontSize: "0.85rem", color: "#cbd5e1", lineHeight: 1.5, margin: "0 0 16px 0" }}>{reassignPreview}</p>

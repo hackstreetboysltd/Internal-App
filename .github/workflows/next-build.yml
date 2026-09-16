@@ -87,6 +87,8 @@ jobs:
           npm run test:email-fetch
           npm run test:portal-url
           npm run test:prod-send-guards
+          npm run test:goal-reassign
+          node --import ./scripts/alias-loader.mjs scripts/test-member-goal-details.mjs
 
       - name: Build (server mode)
         run: npm run build

@@ -15,6 +15,7 @@ import {
   uniqueChannelSlug,
 } from "@/lib/channels";
 import CreateChannelFlow from "./CreateChannelFlow";
+import { listApprovedMembers } from "@/lib/roleAccess";
 
 const ICON_BTN = {
   background: "none",
@@ -98,7 +99,7 @@ function initialsFor(label) {
 export default function ChannelsClient() {
   const router = useRouter();
   const { actor, isAdminView } = useSession();
-  const { adminVisible } = usePortalData();
+  const { adminVisible, allowedEmails } = usePortalData();
   const actorRef = useRef(actor);
   useEffect(() => {
     actorRef.current = actor;
@@ -109,6 +110,7 @@ export default function ChannelsClient() {
   const [loading, setLoading] = useState(true);
   const [channels, setChannels] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const activeProfiles = useMemo(() => listApprovedMembers(profiles, allowedEmails), [profiles, allowedEmails]);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshSpin, setRefreshSpin] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -482,7 +484,7 @@ export default function ChannelsClient() {
           setDescription={setDescription}
           memberEmails={memberEmails}
           setMemberEmails={setMemberEmails}
-          profiles={profiles}
+          profiles={activeProfiles}
           existingChannels={channels}
           excludeId={editId}
           busy={formBusy}

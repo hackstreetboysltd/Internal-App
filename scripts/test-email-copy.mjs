@@ -5,9 +5,15 @@ const {
   goalReminderEmailCopy,
   extractGoalTexts,
   formatGoalsDetailText,
+  firstNamePossessive,
+  reassignedGoalSubject,
 } = await import(new URL("../lib/server/notifications/emailCopy.js", import.meta.url));
 
-assert.equal(formatGoalsDetailText(["Ship Q3"]), "Ship Q3");
+assert.equal(firstNamePossessive("BUNYASI PHIL KAKAI"), "Bunyasi's");
+assert.equal(firstNamePossessive("KakaiK1ng"), "KakaiK1ng's");
+assert.equal(firstNamePossessive("ryan mwiti"), "Ryan's");
+assert.equal(reassignedGoalSubject("BUNYASI PHIL KAKAI", false), "You have been re-assigned Bunyasi's goal");
+assert.equal(reassignedGoalSubject("BUNYASI PHIL KAKAI", true), "You have been re-assigned Bunyasi's goals");
 assert.equal(formatGoalsDetailText(["Ship Q3", "Hire intern"]), "• Ship Q3\n• Hire intern");
 
 const long = "x".repeat(250);
@@ -28,6 +34,25 @@ assert.equal(assigned.headline, "");
 assert.equal(assigned.detail_text, "test");
 assert.equal(assigned.eyebrow, "");
 assert.equal(assigned.subject, "You have been assigned a goal");
+
+const reassigned = assigneeGoalEmailCopy({
+  actorName: "KakaiK1ng",
+  action: "reassigned",
+  previousOwnerName: "BUNYASI PHIL KAKAI",
+  goalItems: [{ text: "Host @app:1787" }],
+  apps: [{ id: "1787", name: "JANELL HEALTH" }],
+  timestamp: "now",
+  portalUrl: "https://example.com",
+});
+assert.equal(reassigned.subject, "You have been re-assigned Bunyasi's goal");
+assert.equal(reassigned.detail_text, "Host @JANELL HEALTH");
+assert.doesNotMatch(reassigned.detail_text, /@app:/);
+
+const mentioned = extractGoalTexts(
+  [{ text: "Host @app:1787650528189" }],
+  [{ id: 1787650528189, name: "JANELL HEALTH" }],
+);
+assert.deepEqual(mentioned, ["Host @JANELL HEALTH"]);
 assert.equal(assigned.show_goal_list, undefined);
 assert.equal(assigned.goals, undefined);
 assert.equal(assigned.action, undefined);
@@ -55,13 +80,14 @@ assert.equal(longAssigned.detail_text.length, 200);
 
 const reminder = goalReminderEmailCopy({
   actorName: "KakaiK1ng",
-  goalText: "test",
+  goalText: "Host @app:1787",
   customMessage: "jooh",
+  apps: [{ id: "1787", name: "JANELL HEALTH" }],
   timestamp: "now",
   portalUrl: "https://example.com",
 });
 assert.equal(reminder.headline, "KakaiK1ng sent you a reminder about this goal.");
-assert.equal(reminder.detail_text, "test");
+assert.equal(reminder.detail_text, "Host @JANELL HEALTH");
 assert.equal(reminder.note, "jooh");
 
 assert.deepEqual(extractGoalTexts([{ text: "  <b>Hi</b>  " }]), ["Hi"]);
@@ -81,5 +107,33 @@ assert.equal(notice.subject, SECURE_MESSAGE_RECEIVED);
 assert.equal(notice.headline, "");
 assert.equal(notice.detail_text, "");
 assert.equal(SECURE_CHANNEL_ADDED, "You have been added to this secure channel. Check it out");
+
+const { buildCollectionIntents } = await import(new URL("../lib/server/notifications/rules.js", import.meta.url));
+const alice = { name: "Alice", email: "alice@example.com" };
+const bob = { name: "Bob", email: "bob@example.com" };
+const oldGoal = {
+  id: "g1",
+  user: "Alice",
+  email: "alice@example.com",
+  assignedByAdmin: false,
+  type: "weekly",
+  periodId: "2026-W38",
+  goals: [{ text: "Host @app:1787" }],
+};
+const movedGoal = {
+  ...oldGoal,
+  user: "Bob",
+  email: "bob@example.com",
+  assignedByAdmin: true,
+};
+const moveIntents = buildCollectionIntents("goals", [oldGoal], [movedGoal], {
+  profiles: [alice, bob],
+  apps: [{ id: "1787", name: "JANELL HEALTH" }],
+});
+const assignee = moveIntents.find((intent) => intent.kind === "assignee");
+assert.equal(assignee.assigneeAction, "reassigned");
+assert.equal(assignee.action, "reassigned");
+assert.equal(assignee.previousOwnerName, "Alice");
+assert.equal(assignee.itemName, "Host @JANELL HEALTH");
 
 console.log("email copy assertions passed");

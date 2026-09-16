@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { get, save, watch } from "@/lib/portalApi";
 import { invalidateCollectionCache } from "@/lib/dataApi";
 import { useSession, clearActiveModule } from "@/lib/session";
+import { usePortalData } from "@/components/PortalDataProvider";
+import { listApprovedMembers } from "@/lib/roleAccess";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
 import { useBusy } from "@/lib/useBusy";
@@ -358,6 +360,7 @@ export default function MessagesClient() {
     const searchParams = useSearchParams();
     const roomFromUrl = String(searchParams.get("room") || "").trim().toLowerCase();
     const { actor } = useSession();
+    const { allowedEmails } = usePortalData();
     const actorRef = useRef(actor);
     useEffect(() => { actorRef.current = actor; }, [actor]);
 
@@ -399,6 +402,7 @@ export default function MessagesClient() {
     const [newDmShown, setNewDmShown] = useState(false);
 
     const actorEmail = (actor?.email || "").trim().toLowerCase();
+    const activeUsers = useMemo(() => listApprovedMembers(users, allowedEmails), [users, allowedEmails]);
     const actorOwns = useCallback(
         (record) => actorOwnsMessage(record, actor),
         [actor],
@@ -1389,7 +1393,7 @@ export default function MessagesClient() {
                                             <>
                                                 <label className="msg-send-to-label">Send to</label>
                                                 <RecipientPicker
-                                                    users={users}
+                                                    users={activeUsers}
                                                     actorEmail={actorEmail}
                                                     identityPub={identityPub}
                                                     selected={composeSelected}
@@ -1477,7 +1481,7 @@ export default function MessagesClient() {
                     </div>
                     <div className="modal-body">
                         <DmPersonPick
-                            users={users}
+                            users={activeUsers}
                             actorEmail={actorEmail}
                             identityPub={identityPub}
                             onPick={(email) => startDirectWith(email)}
