@@ -56,6 +56,7 @@ assert.match(put, /merge:\s*true/, "message send must POST a merge body, not rew
 const portalApi = readFileSync(new URL("../lib/portalApi.js", import.meta.url), "utf8");
 assert.match(portalApi, /messageUpsertsAndDeletes/, "save(messages) must diff instead of always PUT");
 assert.match(portalApi, /mergeCollection/, "send path must call mergeCollection");
+assert.match(portalApi, /mergeCollection\("goals"/, "goal saves must merge, not rewrite the collection");
 
 const dataRoute = readFileSync(new URL("../app/api/data/[collection]/route.js", import.meta.url), "utf8");
 assert.match(dataRoute, /mergeCollectionItemsAtomic/, "POST merge must upsert rows without a full replace");

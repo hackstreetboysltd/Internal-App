@@ -209,8 +209,8 @@ export const DELETE = withApi(async (request, routeContext, { session }) => {
     return NextResponse.json({ error: auth.message }, { status: auth.status });
   }
 
-  // Foreign message/profile rows restored into auth.body must block delete.
-  if (collection === "messages" || collection === "profile") {
+  // Foreign message/profile/goal rows restored into auth.body must block delete.
+  if (collection === "messages" || collection === "profile" || collection === "goals") {
     const stillPresent =
       Array.isArray(auth.body) &&
       auth.body.some((item) => String(item && item.id) === String(id));

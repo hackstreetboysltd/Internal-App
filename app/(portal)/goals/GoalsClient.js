@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { approve, get, GoalUser, reject, save, watch } from "@/lib/portalApi";
 import { apiPath } from "@/lib/apiPath";
-import { useSession, clearActiveModule, getSessionActor } from "@/lib/session";
+import { useSession, clearActiveModule, getSessionActor, waitForSessionReady, loadSessionUser } from "@/lib/session";
 import { usePortalData } from "@/components/PortalDataProvider";
 import ItemMenu from "@/components/ItemMenu";
 import BusyButton from "@/components/BusyButton";
@@ -585,15 +585,21 @@ export default function GoalsClient() {
 
     const persistGoals = useCallback(async (list, { skipReload } = {}) => {
         try {
+            const gate = await waitForSessionReady();
+            if (!gate.hasSession || !loadSessionUser()?.email) {
+                await showAlert("Error", "Your session expired. Sign in again to save goals.");
+                return false;
+            }
             await save("goals", stripTitles(persistableCollection(list)));
             if (!skipReload) await loadAll();
             return true;
         } catch (e) {
             console.error("Error saving goals:", e);
+            const message = e && e.message ? String(e.message) : "Failed to save data to the server.";
             if (isAdminView) {
-                alert("Failed to save goals data to the server.");
+                alert(message);
             } else {
-                await showAlert("Error", "Failed to save data to the server.");
+                await showAlert("Error", message);
             }
             return false;
         }

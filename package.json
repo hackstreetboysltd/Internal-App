@@ -28,6 +28,7 @@
     "test:security-level": "node --import ./scripts/alias-loader.mjs scripts/test-security-level.mjs",
     "test:channel-membership": "node --import ./scripts/alias-loader.mjs scripts/test-channel-membership.mjs",
     "test:dm-channels": "node --import ./scripts/alias-loader.mjs scripts/test-dm-channels.mjs",
+    "test:goal-save": "node --import ./scripts/alias-loader.mjs scripts/test-goal-save.mjs",
     "test:message-save": "node --import ./scripts/alias-loader.mjs scripts/test-message-save.mjs",
     "test:message-security": "node --import ./scripts/alias-loader.mjs scripts/test-message-security.mjs",
     "test:hybrid-crypto": "node --import ./scripts/alias-loader.mjs scripts/test-hybrid-crypto.mjs",
